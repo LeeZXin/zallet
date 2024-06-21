@@ -1,0 +1,15 @@
+env: sit
+app: zallet
+start: |
+  set -e
+  echo start
+with:
+  a: hhhhhhh
+probe:
+  type: http
+  http:
+    url: http://127.0.0.1/health
+  onFail:
+    times: 3
+    action: |
+      echo fail

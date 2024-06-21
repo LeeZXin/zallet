@@ -1,0 +1,12 @@
+logs
+**/logs
+
+.idea
+
+**/*.sock
+
+zallet
+
+**/duck
+
+
