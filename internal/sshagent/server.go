@@ -28,10 +28,6 @@ var (
 	validTaskIdRegexp *regexp.Regexp
 )
 
-var (
-	pwdDir string
-)
-
 type handler func(ssh.Session, map[string]string, string, string)
 
 type AgentServer struct {
@@ -256,7 +252,6 @@ func notifyCallback(callbackUrl, token, taskId string, req any) {
 
 func NewAgentServer(baseDir string) *AgentServer {
 	validTaskIdRegexp = regexp.MustCompile(`^\d{10}\S+$`)
-	pwdDir = baseDir
 	agent := new(AgentServer)
 	poolSize := static.GetInt("ssh.agent.workflow.poolSize")
 	if poolSize <= 0 {
@@ -279,8 +274,8 @@ func NewAgentServer(baseDir string) *AgentServer {
 	agent.token = static.GetString("ssh.agent.token")
 	agent.graphMap = newGraphMap()
 	agent.cmdMap = newCmdMap()
-	agent.workflowDir = filepath.Join(pwdDir, "workflow")
-	agent.servicesDir = filepath.Join(pwdDir, "services")
+	agent.workflowDir = filepath.Join(baseDir, "workflow")
+	agent.servicesDir = filepath.Join(baseDir, "services")
 	agent.handlerMap = map[string]handler{
 		"getWorkflowStepLog": func(session ssh.Session, args map[string]string, _ string, _ string) {
 			taskId := args["i"]
@@ -548,7 +543,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 	}
 	serv, err := zssh.NewServer(&zssh.ServerOpts{
 		Port:    agentPort,
-		HostKey: filepath.Join(pwdDir, "data", "ssh", "sshAgent.rsa"),
+		HostKey: filepath.Join(baseDir, "data", "ssh", "sshAgent.rsa"),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			if ctx.User() != "zall" {
 				return false

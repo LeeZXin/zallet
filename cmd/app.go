@@ -12,7 +12,7 @@ var (
 		Service,
 		Health,
 		Kill,
-		Agent,
+		SshAgent,
 	}
 )
 

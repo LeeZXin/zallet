@@ -33,6 +33,6 @@ type ReportDaemonReq struct {
 }
 
 type ReportDaemonResp struct {
-	Exist   string `json:"exist"`
+	Exist   bool   `json:"exist"`
 	Message string `json:"message"`
 }

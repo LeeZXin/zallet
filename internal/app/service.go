@@ -186,8 +186,7 @@ func (s *Service) reportDaemon() {
 			if err != nil {
 				return
 			}
-			// 以防默认值
-			if rdr.Exist == "false" {
+			if !rdr.Exist {
 				s.Shutdown(errors.New(rdr.Message))
 				s.ShutdownChan <- struct{}{}
 			}

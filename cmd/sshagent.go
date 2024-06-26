@@ -9,10 +9,10 @@ import (
 	"syscall"
 )
 
-var Agent = &cli.Command{
+var SshAgent = &cli.Command{
 	Name:   "agent",
 	Usage:  "This command starts ssh agent",
-	Action: agent,
+	Action: sshAgent,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "baseDir",
@@ -21,7 +21,7 @@ var Agent = &cli.Command{
 	},
 }
 
-func agent(ctx *cli.Context) error {
+func sshAgent(ctx *cli.Context) error {
 	baseDir := ctx.String("baseDir")
 	if baseDir == "" {
 		baseDir = "/usr/local/zallet"
