@@ -53,14 +53,7 @@ type AsyncCommand struct {
 	closeErrChanOnce sync.Once
 }
 
-func (p *AsyncCommand) closeErrChan() {
-	p.closeErrChanOnce.Do(func() {
-		close(p.errChan)
-	})
-}
-
 func (p *AsyncCommand) Kill() error {
-	p.closeErrChan()
 	return util.KillPid(p.Cmd.Process.Pid)
 }
 
@@ -119,7 +112,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		errChan: make(chan error),
 	}
 	go func() {
-		defer ret.closeErrChan()
+		defer close(ret.errChan)
 		err2 := cmd.Run()
 		if stderr.Len() > 0 {
 			err2 = errors.New(stderr.String())

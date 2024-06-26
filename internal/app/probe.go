@@ -36,26 +36,13 @@ func (t *HttpProbe) IsValid() bool {
 	return strings.HasPrefix(parsed.Scheme, "http")
 }
 
-type ProbeFail struct {
-	Times  int    `json:"times" yaml:"times"`
-	Action string `json:"action" yaml:"action"`
-}
-
-func (f *ProbeFail) IsValid() bool {
-	return f.Times > 0 && len(f.Action) > 0
-}
-
 type Probe struct {
-	Type   ProbeType  `json:"type" yaml:"type"`
-	Tcp    *TcpProbe  `json:"tcp,omitempty" yaml:"tcp,omitempty"`
-	Http   *HttpProbe `json:"http,omitempty" yaml:"http,omitempty"`
-	OnFail *ProbeFail `json:"onFail,omitempty" yaml:"onFail,omitempty"`
+	Type ProbeType  `json:"type" yaml:"type"`
+	Tcp  *TcpProbe  `json:"tcp,omitempty" yaml:"tcp,omitempty"`
+	Http *HttpProbe `json:"http,omitempty" yaml:"http,omitempty"`
 }
 
 func (p *Probe) IsValid() bool {
-	if p.OnFail != nil && !p.OnFail.IsValid() {
-		return false
-	}
 	switch p.Type {
 	case HttpProbeType:
 		return p.Http != nil && p.Http.IsValid()
