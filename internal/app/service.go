@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"github.com/LeeZXin/zallet/internal/reexec"
 	"github.com/LeeZXin/zallet/internal/util"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -78,6 +80,8 @@ func RunService(opts ServiceOpts) (*Service, error) {
 		httpClient:      util.NewUnixHttpClient(opts.SockFile),
 		ShutdownChan:    make(chan struct{}),
 	}
+	// 上报守护进程
+	go srv.runDaemon()
 	// 启动服务
 	go srv.start()
 	// 心跳检查
@@ -85,6 +89,47 @@ func RunService(opts ServiceOpts) (*Service, error) {
 		go srv.runProbe()
 	}
 	return srv, nil
+}
+
+func (s *Service) runDaemon() {
+	for s.ctx.Err() == nil {
+		time.Sleep(10 * time.Second)
+		s.reportDaemon()
+	}
+}
+
+func (s *Service) reportDaemon() {
+	req := ReportDaemonReq{
+		ServiceId: s.serviceId,
+		Pid:       s.pid,
+		EventTime: time.Now().UnixMilli(),
+	}
+	m, _ := json.Marshal(req)
+	resp, err := s.httpClient.Post(
+		"http://fake/api/reportDaemon",
+		"application/json;charset=utf-8",
+		bytes.NewReader(m),
+	)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return
+			}
+			var rdr ReportDaemonResp
+			err = json.Unmarshal(body, &rdr)
+			if err != nil {
+				return
+			}
+			if !rdr.Exist {
+				s.Shutdown(errors.New(rdr.Message))
+				s.ShutdownChan <- struct{}{}
+			}
+		}
+	} else {
+		log.Printf("reportDaemon failed with err: %v", err)
+	}
 }
 
 func (s *Service) reportProbe(isSuccess bool, failCount int64) {
@@ -104,6 +149,8 @@ func (s *Service) reportProbe(isSuccess bool, failCount int64) {
 	)
 	if err == nil {
 		resp.Body.Close()
+	} else {
+		log.Printf("reportProbe failed with err: %v", err)
 	}
 }
 

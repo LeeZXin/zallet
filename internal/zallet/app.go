@@ -44,6 +44,21 @@ func (s *Server) KillService(serviceId string) error {
 	return nil
 }
 
+func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
+	session := s.xengine.NewSession()
+	defer session.Close()
+	srv, b, err := getServiceByServiceId(session, req.ServiceId)
+	// 数据库的错误忽略
+	if err != nil {
+		log.Printf("updateServiceStatus :%v failed with err: %v", req.ServiceId, err)
+		return nil
+	}
+	if !b || srv.Pid != req.Pid {
+		return fmt.Errorf("unknown service id: %s", req.ServiceId)
+	}
+	return nil
+}
+
 func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
 	serviceId := util.RandomUuid()
 	var cmdRet *reexec.AsyncCommand

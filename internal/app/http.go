@@ -12,7 +12,6 @@ type ReportProbeReq struct {
 const (
 	StartingServiceStatus = "starting"
 	RunningServiceStatus  = "running"
-	RestartServiceStatus  = "restart"
 	FailedServiceStatus   = "failed"
 	ShutdownServiceStatus = "shutdown"
 )
@@ -24,4 +23,15 @@ type ReportStatusReq struct {
 	Status    string `json:"status"`
 	Revision  uint64 `json:"revision"`
 	ErrLog    string `json:"errLog"`
+}
+
+type ReportDaemonReq struct {
+	ServiceId string `json:"serviceId"`
+	Pid       int    `json:"pid"`
+	EventTime int64  `json:"eventTime"`
+}
+
+type ReportDaemonResp struct {
+	Exist   bool   `json:"exist"`
+	Message string `json:"message"`
 }

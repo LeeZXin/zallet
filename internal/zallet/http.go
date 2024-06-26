@@ -24,6 +24,8 @@ func registerHandler(e *gin.Engine) {
 		group.GET("/health", health)
 		// 启动服务
 		group.POST("/apply", applyAppYaml)
+		// 来自服务的上报
+		group.POST("/reportDaemon", reportDaemon)
 		// 上报状态
 		group.POST("/reportStatus", reportStatus)
 		// 上报探针
@@ -119,6 +121,21 @@ func reportStatus(c *gin.Context) {
 	if util.ShouldBindJSON(&req, c) {
 		server.ReportStatus(req)
 		c.String(http.StatusOK, "")
+	}
+}
+
+func reportDaemon(c *gin.Context) {
+	var req app.ReportDaemonReq
+	if util.ShouldBindJSON(&req, c) {
+		err := server.ReportDaemon(req)
+		var resp app.ReportDaemonResp
+		if err != nil {
+			resp.Exist = false
+			resp.Message = err.Error()
+		} else {
+			resp.Exist = true
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }
 
