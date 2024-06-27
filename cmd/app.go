@@ -20,7 +20,6 @@ func NewCliApp() *cli.App {
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
 	app.HideHelp = true
-	app.DefaultCommand = Run.Name
 	app.Commands = cmdList
 	app.Name = "zallet"
 	app.Usage = "A zallet server used for deploy service"
