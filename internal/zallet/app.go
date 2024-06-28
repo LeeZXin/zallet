@@ -40,7 +40,7 @@ func (s *Server) KillService(serviceId string) error {
 		return fmt.Errorf("%s belongs to instance: %s", serviceId, srv.InstanceId)
 	}
 	deleteServiceByServiceId(session, serviceId)
-	log.Printf("kill service: %v pid: %v with err: %v", serviceId, srv.Pid, util.KillPid(srv.Pid))
+	log.Printf("kill service: %v pid: %v with err: %v", serviceId, srv.Pid, util.KillNegativePid(srv.Pid))
 	return nil
 }
 

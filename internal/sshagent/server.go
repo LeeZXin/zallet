@@ -495,8 +495,17 @@ func NewAgentServer(baseDir string) *AgentServer {
 			session.Exit(0)
 		},
 		"execute": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
-			id := util.RandomUuid()
-			cmdPath := filepath.Join(tempDir, id)
+			taskId := args["i"]
+			if !validTaskIdRegexp.MatchString(taskId) {
+				returnErrMsg(session, "invalid taskId")
+				return
+			}
+			cmd := agent.cmdMap.GetById(taskId)
+			if cmd != nil {
+				returnErrMsg(session, "duplicated taskId")
+				return
+			}
+			cmdPath := filepath.Join(tempDir, taskId)
 			file, err := os.OpenFile(cmdPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 			if err != nil {
 				returnErrMsg(session, err.Error())
@@ -514,16 +523,16 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			cmd, err := newCommand(session.Context(), "bash -c "+cmdPath, session, session, workdir, session.Environ())
+			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session, workdir, session.Environ())
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			if !agent.cmdMap.PutIfAbsent(id, cmd) {
-				returnErrMsg(session, "duplicated id")
+			if !agent.cmdMap.PutIfAbsent(taskId, cmd) {
+				returnErrMsg(session, "duplicated taskId")
 				return
 			}
-			defer agent.cmdMap.Remove(id)
+			defer agent.cmdMap.Remove(taskId)
 			err = cmd.Start()
 			if err != nil {
 				returnErrMsg(session, err.Error())
@@ -534,6 +543,21 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
+			session.Exit(0)
+		},
+		"kill": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
+			taskId := args["i"]
+			if !validTaskIdRegexp.MatchString(taskId) {
+				returnErrMsg(session, "invalid taskId")
+				return
+			}
+			cmd := agent.cmdMap.GetById(taskId)
+			if cmd == nil {
+				returnErrMsg(session, "unknown taskId")
+				return
+			}
+			defer agent.graphMap.Remove(taskId)
+			util.KillPid(cmd.Process.Pid)
 			session.Exit(0)
 		},
 	}
