@@ -3,6 +3,7 @@ package sshagent
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/LeeZXin/zallet/internal/action"
@@ -25,7 +26,9 @@ import (
 )
 
 var (
-	validTaskIdRegexp *regexp.Regexp
+	validWorkflowTaskIdRegexp *regexp.Regexp
+	validStageTaskIdRegexp    *regexp.Regexp
+	httpClient                *http.Client
 )
 
 type handler func(ssh.Session, map[string]string, string, string)
@@ -63,7 +66,7 @@ func (a *AgentServer) Shutdown() {
 }
 
 type BaseStatus struct {
-	Status    string `json:"status"`
+	Status    Status `json:"status"`
 	Duration  int64  `json:"duration"`
 	ErrLog    string `json:"errLog"`
 	BeginTime int64  `json:"beginTime"`
@@ -86,8 +89,9 @@ type StepStatus struct {
 }
 
 type TaskStatusCallbackReq struct {
-	Status   string `json:"status"`
-	Duration int64  `json:"duration"`
+	Status   Status      `json:"status"`
+	Duration int64       `json:"duration"`
+	Task     *TaskStatus `json:"task,omitempty"`
 }
 
 func getBaseStatus(store Store) BaseStatus {
@@ -238,20 +242,42 @@ func mkdir(dir string) bool {
 }
 
 func notifyCallback(callbackUrl, token, taskId string, req any) {
+	if callbackUrl == "" {
+		return
+	}
 	m, _ := json.Marshal(req)
 	request, err := http.NewRequest(http.MethodPost, callbackUrl+"?taskId="+taskId, bytes.NewReader(m))
 	if err == nil {
-		request.Header.Set("Content-Type", "application/yaml;charset=utf-8")
+		request.Header.Set("Content-Type", "application/json;charset=utf-8")
 		request.Header.Set("Authorization", token)
-		resp, err := http.DefaultClient.Do(request)
+		resp, err := httpClient.Do(request)
 		if err == nil {
 			defer resp.Body.Close()
+		} else {
+			log.Println(err)
 		}
+	} else {
+		log.Println(err)
 	}
 }
 
 func NewAgentServer(baseDir string) *AgentServer {
-	validTaskIdRegexp = regexp.MustCompile(`^\d{10}\S+$`)
+	validWorkflowTaskIdRegexp = regexp.MustCompile(`^\d{10}\S+$`)
+	validStageTaskIdRegexp = regexp.MustCompile(`^\S{32}$`)
+	httpClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			TLSHandshakeTimeout: 10 * time.Second,
+			MaxIdleConns:        1,
+			IdleConnTimeout:     time.Minute,
+			MaxConnsPerHost:     100,
+			MaxIdleConnsPerHost: 100,
+			ForceAttemptHTTP2:   true,
+		},
+		Timeout: 3 * time.Second,
+	}
 	agent := new(AgentServer)
 	poolSize := static.GetInt("ssh.agent.workflow.poolSize")
 	if poolSize <= 0 {
@@ -279,7 +305,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 	agent.handlerMap = map[string]handler{
 		"getWorkflowStepLog": func(session ssh.Session, args map[string]string, _ string, _ string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
 				return
 			}
@@ -308,7 +334,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		},
 		"getWorkflowTaskOrigin": func(session ssh.Session, args map[string]string, _ string, _ string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
 				return
 			}
@@ -323,7 +349,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		},
 		"getWorkflowTaskStatus": func(session ssh.Session, args map[string]string, _ string, _ string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
 				return
 			}
@@ -334,7 +360,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		},
 		"executeWorkflow": func(session ssh.Session, args map[string]string, workDir string, tempDir string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid task id")
 				return
 			}
@@ -450,7 +476,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				if err != nil {
 					graph.Cancel(action.TaskCancelErr)
 				}
-				var status string
+				var status Status
 				if err == nil {
 					status = SuccessStatus
 				} else {
@@ -466,15 +492,13 @@ func NewAgentServer(baseDir string) *AgentServer {
 				}
 				duration := graph.SinceBeginTime()
 				taskStore.StoreStatus(status, duration)
-				if callbackUrl != "" {
-					if callbackUrl != "" {
-						// 通知回调
-						notifyCallback(callbackUrl, token, taskId, TaskStatusCallbackReq{
-							Status:   status,
-							Duration: duration.Milliseconds(),
-						})
-					}
-				}
+				taskStatus := getTaskStatus(logDir)
+				// 通知回调
+				notifyCallback(callbackUrl, token, taskId, TaskStatusCallbackReq{
+					Status:   status,
+					Duration: duration.Milliseconds(),
+					Task:     &taskStatus,
+				})
 			}); rErr != nil {
 				agent.graphMap.Remove(taskId)
 				returnErrMsg(session, "out of capacity")
@@ -496,7 +520,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		},
 		"execute": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validStageTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid taskId")
 				return
 			}
@@ -547,7 +571,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		},
 		"kill": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
 			taskId := args["i"]
-			if !validTaskIdRegexp.MatchString(taskId) {
+			if !validStageTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid taskId")
 				return
 			}
@@ -556,8 +580,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, "unknown taskId")
 				return
 			}
-			defer agent.graphMap.Remove(taskId)
-			util.KillPid(cmd.Process.Pid)
+			log.Printf("kill taskId: %s with err: %v", taskId, util.KillPid(cmd.Process.Pid))
 			session.Exit(0)
 		},
 	}

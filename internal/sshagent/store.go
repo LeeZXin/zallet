@@ -13,15 +13,17 @@ import (
 	"time"
 )
 
+type Status string
+
 const (
-	RunningStatus = "running"
-	SuccessStatus = "success"
-	FailStatus    = "fail"
-	TimeoutStatus = "timeout"
-	CancelStatus  = "cancel"
-	QueueStatus   = "queue"
-	UnknownStatus = "unknown"
-	UnExecuted    = "unExecuted"
+	RunningStatus Status = "running"
+	SuccessStatus Status = "success"
+	FailStatus    Status = "fail"
+	TimeoutStatus Status = "timeout"
+	CancelStatus  Status = "cancel"
+	QueueStatus   Status = "queue"
+	UnknownStatus Status = "unknown"
+	UnExecuted    Status = "unExecuted"
 )
 
 const (
@@ -32,18 +34,18 @@ const (
 	logFileName    = "log"
 )
 
-func toStatusMsg(status string, duration time.Duration) string {
+func toStatusMsg(status Status, duration time.Duration) string {
 	return fmt.Sprintf("%s %d", status, duration.Milliseconds())
 }
 
-func toStatusMsgBytes(status string, duration time.Duration) []byte {
+func toStatusMsgBytes(status Status, duration time.Duration) []byte {
 	return []byte(toStatusMsg(status, duration))
 }
 
 type Store interface {
 	IsExists() bool
-	StoreStatus(string, time.Duration) error
-	ReadStatus() (string, int64, error)
+	StoreStatus(Status, time.Duration) error
+	ReadStatus() (Status, int64, error)
 	StoreBeginTime(time.Time) error
 	ReadBeginTime() (time.Time, error)
 	StoreErrLog(error) error
@@ -69,14 +71,14 @@ func (s *fileStore) IsExists() bool {
 	return ret
 }
 
-func (s *fileStore) StoreStatus(status string, duration time.Duration) error {
+func (s *fileStore) StoreStatus(status Status, duration time.Duration) error {
 	return os.WriteFile(filepath.Join(s.BaseDir, statusFileName),
 		toStatusMsgBytes(status, duration),
 		os.ModePerm,
 	)
 }
 
-func (s *fileStore) ReadStatus() (string, int64, error) {
+func (s *fileStore) ReadStatus() (Status, int64, error) {
 	content, err := os.ReadFile(filepath.Join(s.BaseDir, statusFileName))
 	if err != nil {
 		return "", 0, err
@@ -144,10 +146,10 @@ func (s *fileStore) ReadLog() (io.ReadCloser, error) {
 	return os.Open(filepath.Join(s.BaseDir, logFileName))
 }
 
-func convertStatusFileContent(content []byte) (string, int64) {
+func convertStatusFileContent(content []byte) (Status, int64) {
 	fields := strings.Fields(strings.TrimSpace(string(content)))
 	if len(fields) != 2 {
 		return UnknownStatus, 0
 	}
-	return fields[0], cast.ToInt64(fields[1])
+	return Status(fields[0]), cast.ToInt64(fields[1])
 }
