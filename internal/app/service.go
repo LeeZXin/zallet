@@ -238,8 +238,8 @@ func (s *Service) runProbe() {
 func (s *Service) restart() {
 	srv := s.serviceCmd.Load()
 	if srv != nil {
-		srv.(*reexec.AsyncCommand).Kill()
 		s.serviceCmd.Store((*reexec.AsyncCommand)(nil))
+		srv.(*reexec.AsyncCommand).Kill()
 	}
 	s.start()
 }

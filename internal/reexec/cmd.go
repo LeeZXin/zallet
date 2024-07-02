@@ -23,7 +23,10 @@ type AsyncCommand struct {
 }
 
 func (p *AsyncCommand) Kill() error {
-	return util.KillNegativePid(p.Cmd.Process.Pid)
+	if p.Cmd.Process != nil {
+		return util.KillNegativePid(p.Cmd.Process.Pid)
+	}
+	return nil
 }
 
 func (p *AsyncCommand) Wait() error {
@@ -86,11 +89,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		defer close(ret.errChan)
 		err2 := cmd.Run()
 		if stderr.Len() > 0 {
-			i := stderr.Bytes()
-			if stdout != nil {
-				stdout.Write(i)
-			}
-			err2 = errors.New(string(i))
+			err2 = errors.New(stderr.String())
 		}
 		if err2 != nil {
 			log.Printf("run [%s] failed with err: %v", script, err2)
@@ -106,10 +105,8 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 	for {
 		select {
 		case err := <-ret.errChan:
-			if err == nil {
-				for cmd.Process == nil {
-					time.Sleep(time.Second)
-				}
+			for err == nil && cmd.Process == nil {
+				time.Sleep(time.Second)
 			}
 			return ret, err
 		default:

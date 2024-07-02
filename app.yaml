@@ -2,6 +2,7 @@ env: sit
 app: zallet
 start: |
   set -e
+  sleep 20
   echo start
 with:
   a: hhhhhhh
