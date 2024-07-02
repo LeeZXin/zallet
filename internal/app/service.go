@@ -21,6 +21,7 @@ type Service struct {
 	opts            ServiceOpts
 	serviceId       string
 	serviceDir      string
+	logDir          string
 	tempDir         string
 	pid             int
 	ctx             context.Context
@@ -62,8 +63,13 @@ func RunService(opts ServiceOpts) (*Service, error) {
 		return nil, err
 	}
 	serviceDir := filepath.Join(opts.BaseDir, opts.Yaml.App)
+	logDir := filepath.Join(serviceDir, "log")
+	err := os.MkdirAll(logDir, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
 	tempDir := filepath.Join(serviceDir, "temp")
-	err := os.MkdirAll(tempDir, os.ModePerm)
+	err = os.MkdirAll(tempDir, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +78,7 @@ func RunService(opts ServiceOpts) (*Service, error) {
 		opts:            opts,
 		serviceId:       opts.ServiceId,
 		serviceDir:      serviceDir,
+		logDir:          logDir,
 		tempDir:         tempDir,
 		pid:             os.Getpid(),
 		ctx:             ctx,
@@ -183,8 +190,8 @@ func (s *Service) start() {
 		s.opts.Yaml.Start,
 		util.MergeEnvs(s.opts.Envs),
 		nil,
-		nil,
 		false,
+		filepath.Join(s.logDir, s.serviceId+".log"),
 	)
 	if err2 != nil {
 		s.reportStatus(FailedServiceStatus, err2)
@@ -222,17 +229,17 @@ func (s *Service) runProbe() {
 		s.reportProbe(probeRet, failed)
 		if failed > 0 && failed%3 == 0 {
 			// 重启服务
-			s.restart(fmt.Errorf("probe failed: %v", failed))
+			s.restart()
+			failed = 0
 		}
 	}
 }
 
-func (s *Service) restart(err error) {
-	s.reportStatus(ShutdownServiceStatus, err)
+func (s *Service) restart() {
 	srv := s.serviceCmd.Load()
 	if srv != nil {
 		srv.(*reexec.AsyncCommand).Kill()
-		s.serviceCmd.Store(nil)
+		s.serviceCmd.Store((*reexec.AsyncCommand)(nil))
 	}
 	s.start()
 }

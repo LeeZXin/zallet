@@ -9,7 +9,3 @@ probe:
   type: http
   http:
     url: http://127.0.0.1/health
-  onFail:
-    times: 3
-    action: |
-      echo fail

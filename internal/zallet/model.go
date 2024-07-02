@@ -19,6 +19,8 @@ type ServiceModel struct {
 	ProbeTimestamp int64     `json:"probeTimestamp"`
 	ProbeFailCount int64     `json:"probeFailCount"`
 	ProbeRevision  uint64    `json:"probeRevision"`
+	AgentHost      string    `json:"agentHost"`
+	AgentToken     string    `json:"agentToken"`
 	Env            string    `json:"env"`
 	Created        time.Time `json:"created" xorm:"created"`
 }

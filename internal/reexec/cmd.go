@@ -6,6 +6,7 @@ import (
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/google/uuid"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,38 +15,6 @@ import (
 	"syscall"
 	"time"
 )
-
-func ExecCommand(workDir, script string, envs []string, stdin io.Reader, stdout io.Writer) error {
-	if script == "" {
-		return errors.New("empty script")
-	}
-	cmdPath := filepath.Join(workDir, uuid.NewString())
-	err := os.WriteFile(cmdPath, []byte(script), os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(cmdPath)
-	cmd := exec.Command("chmod", "+x", cmdPath)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	cmd = exec.Command("bash", "-c", cmdPath)
-	stderr := new(bytes.Buffer)
-	cmd.Stdin = stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if len(envs) > 0 {
-		cmd.Env = append(os.Environ(), envs...)
-	} else {
-		cmd.Env = os.Environ()
-	}
-	err = cmd.Run()
-	if stderr.Len() > 0 {
-		return errors.New(stderr.String())
-	}
-	return err
-}
 
 type AsyncCommand struct {
 	Cmd              *exec.Cmd
@@ -64,7 +33,7 @@ func (p *AsyncCommand) Wait() error {
 	}
 }
 
-func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, stdout io.Writer, setPgid bool) (*AsyncCommand, error) {
+func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, setPgid bool, logDir string) (*AsyncCommand, error) {
 	if script == "" {
 		return nil, errors.New("empty script")
 	}
@@ -78,7 +47,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		if err != nil {
 			return nil, err
 		}
-		defer os.RemoveAll(cmdPath)
+		defer os.Remove(cmdPath)
 		cmd = exec.Command("chmod", "+x", cmdPath)
 		err = cmd.Run()
 		if err != nil {
@@ -93,14 +62,12 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 			cmd = exec.Command(fields[0])
 		}
 	}
-	if setPgid {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: setPgid,
 	}
 	stderr := new(bytes.Buffer)
+	cmd.Dir = workDir
 	cmd.Stdin = stdin
-	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	if len(envs) > 0 {
 		cmd.Env = append(os.Environ(), envs...)
@@ -112,10 +79,22 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		errChan: make(chan error),
 	}
 	go func() {
+		file, _ := os.Create(logDir)
+		cmd.Stdout = file
+		if file != nil {
+			defer file.Close()
+		}
 		defer close(ret.errChan)
 		err2 := cmd.Run()
 		if stderr.Len() > 0 {
-			err2 = errors.New(stderr.String())
+			i := stderr.Bytes()
+			if file != nil {
+				file.Write(i)
+			}
+			err2 = errors.New(string(i))
+		}
+		if err2 != nil {
+			log.Printf("run [%s] failed with err: %v", script, err2)
 		}
 		transferErr := func(e error) {
 			defer func() {
@@ -125,8 +104,20 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		}
 		transferErr(err2)
 	}()
-	for cmd.Process == nil {
+	for {
+		select {
+		case err := <-ret.errChan:
+			if err == nil {
+				for cmd.Process == nil {
+					time.Sleep(time.Second)
+				}
+			}
+			return ret, err
+		default:
+			if cmd.Process != nil {
+				return ret, nil
+			}
+		}
 		time.Sleep(time.Second)
 	}
-	return ret, nil
 }

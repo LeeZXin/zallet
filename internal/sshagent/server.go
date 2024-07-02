@@ -35,7 +35,7 @@ type handler func(ssh.Session, map[string]string, string, string)
 
 type AgentServer struct {
 	*zssh.Server
-	token            string
+	Token            string
 	graphMap         *graphMap
 	handlerMap       map[string]handler
 	workflowDir      string
@@ -172,7 +172,6 @@ func getTaskStatus(baseDir string) TaskStatus {
 		for _, jobName := range jobsInDfsOrder {
 			ret.JobStatus = append(ret.JobStatus, getJobStatus(baseDir, jobName, jobsMap[jobName]))
 		}
-		//
 	}
 	ret.BaseStatus = getBaseStatus(store)
 	return ret
@@ -297,7 +296,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 		queueSize = 1024
 	}
 	agent.serviceExecutor, _ = executor.NewExecutor(poolSize, queueSize, time.Minute, executor.AbortStrategy)
-	agent.token = static.GetString("ssh.agent.token")
+	agent.Token = static.GetString("ssh.agent.Token")
 	agent.graphMap = newGraphMap()
 	agent.cmdMap = newCmdMap()
 	agent.workflowDir = filepath.Join(baseDir, "workflow")
@@ -584,12 +583,15 @@ func NewAgentServer(baseDir string) *AgentServer {
 			session.Exit(0)
 		},
 	}
-	agentPort := static.GetInt("ssh.agent.port")
-	if agentPort <= 0 {
-		agentPort = 6666
+	agentHost := static.GetString("ssh.agent.host")
+	if agentHost == "" {
+		agentHost = "127.0.0.1:6666"
+	}
+	if !regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}:\d+$`).MatchString(agentHost) {
+		log.Fatalf("invalid agent host: %v", agentHost)
 	}
 	serv, err := zssh.NewServer(&zssh.ServerOpts{
-		Port:    agentPort,
+		Host:    agentHost,
 		HostKey: filepath.Join(baseDir, "data", "ssh", "sshAgent.rsa"),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			if ctx.User() != "zall" {
@@ -609,8 +611,8 @@ func NewAgentServer(baseDir string) *AgentServer {
 				return
 			}
 			// token校验
-			if cmd.Args["t"] != agent.token {
-				returnErrMsg(session, "invalid token")
+			if cmd.Args["t"] != agent.Token {
+				returnErrMsg(session, "invalid Token")
 				return
 			}
 			var workdir string

@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
 	app := cmd.NewCliApp()
 	err := app.Run(os.Args)
 	if err != nil {

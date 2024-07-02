@@ -7,17 +7,15 @@ import (
 	"github.com/gliderlabs/ssh"
 	gossh "golang.org/x/crypto/ssh"
 	"log"
-	"net"
-	"strconv"
 )
 
 type Server struct {
 	*ssh.Server
-	Port int
+	Host string
 }
 
 type ServerOpts struct {
-	Port             int
+	Host             string
 	HostKey          string
 	PublicKeyHandler ssh.PublicKeyHandler
 	SessionHandler   ssh.Handler
@@ -33,12 +31,12 @@ func NewServer(opts *ServerOpts) (*Server, error) {
 	if opts.SessionHandler == nil {
 		return nil, errors.New("nil sessionHandler")
 	}
-	if opts.Port <= 0 {
-		return nil, errors.New("wrong port")
+	if opts.Host == "" {
+		return nil, errors.New("wrong host")
 	}
 	hostKey, err := util.ReadOrGenRsaKey(opts.HostKey)
 	srv := &ssh.Server{
-		Addr:             net.JoinHostPort("", strconv.Itoa(opts.Port)),
+		Addr:             opts.Host,
 		PublicKeyHandler: opts.PublicKeyHandler,
 		Handler:          opts.SessionHandler,
 		ServerConfigCallback: func(ctx ssh.Context) *gossh.ServerConfig {
@@ -60,13 +58,13 @@ func NewServer(opts *ServerOpts) (*Server, error) {
 	}
 	return &Server{
 		Server: srv,
-		Port:   opts.Port,
+		Host:   opts.Host,
 	}, nil
 }
 
 func (s *Server) Start() {
 	go func() {
-		log.Printf("start ssh server port: %d", s.Port)
+		log.Printf("start ssh server %s", s.Host)
 		err := s.ListenAndServe()
 		if err != nil && err != ssh.ErrServerClosed {
 			log.Fatalf("start ssh server err: %v", err)

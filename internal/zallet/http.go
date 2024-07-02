@@ -35,7 +35,7 @@ func registerHandler(e *gin.Engine) {
 
 func (s *Server) shutdown() {
 	if s.httpServer != nil {
-		s.httpServer.Shutdown(nil)
+		s.httpServer.Shutdown(context.Background())
 	}
 	if s.checkServiceTaskCancelFunc != nil {
 		s.checkServiceTaskCancelFunc()

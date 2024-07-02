@@ -21,8 +21,11 @@ var (
 )
 
 type Server struct {
+	sshHost                    string
+	sshToken                   string
 	baseDir                    string
 	tempDir                    string
+	logDir                     string
 	instanceId                 string
 	sockFile                   string
 	xengine                    *xorm.Engine
@@ -51,18 +54,27 @@ func Init(baseDir string) {
 	if err != nil {
 		log.Fatalf("MkdirAll %s failed with err: %v", server.tempDir, err)
 	}
+	server.logDir = filepath.Join(server.baseDir, "log")
+	err = os.MkdirAll(server.logDir, os.ModePerm)
+	if err != nil {
+		log.Fatalf("MkdirAll %s failed with err: %v", server.logDir, err)
+	}
 	server.initXorm()
 	server.readInstanceId()
 	server.httpClient = &http.Client{
 		Timeout: time.Second,
 	}
 	server.appPath = util.GetAppPath()
+	log.Printf("app path: %v", server.appPath)
 	server.startHttpServer()
 	// 反向检查服务是否存在
 	go server.checkServiceExist()
 	// ssh server
 	agent := sshagent.NewAgentServer(server.baseDir)
 	agent.Start()
+	server.sshHost = agent.Host
+	server.sshToken = agent.Token
+	//
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

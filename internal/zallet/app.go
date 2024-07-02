@@ -3,11 +3,13 @@ package zallet
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/LeeZXin/zallet/internal/app"
 	"github.com/LeeZXin/zallet/internal/reexec"
 	"github.com/LeeZXin/zallet/internal/util"
 	"log"
+	"path/filepath"
 	"xorm.io/xorm"
 )
 
@@ -62,34 +64,41 @@ func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
 func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
 	serviceId := util.RandomUuid()
 	var cmdRet *reexec.AsyncCommand
+	opts := app.ServiceOpts{
+		ServiceId: serviceId,
+		Yaml:      appYaml,
+		BaseDir:   s.baseDir,
+		SockFile:  s.sockFile,
+		Envs:      nil,
+	}
+	m, _ := json.Marshal(opts)
 	_, err := s.xengine.Transaction(func(session *xorm.Session) (any, error) {
-		opts := app.ServiceOpts{
-			ServiceId: serviceId,
-			Yaml:      appYaml,
-			BaseDir:   s.baseDir,
-			SockFile:  s.sockFile,
-			Envs:      nil,
-		}
-		m, _ := json.Marshal(opts)
 		var err2 error
 		cmdRet, err2 = reexec.RunAsyncCommand(
 			s.tempDir,
 			fmt.Sprintf("%s service", s.appPath),
-			nil, bytes.NewReader(m),
 			nil,
+			bytes.NewReader(m),
 			true,
+			filepath.Join(s.logDir, serviceId+".log"),
 		)
 		if err2 != nil {
 			return nil, err2
 		}
-		return nil, insertServiceModel(session, &ServiceModel{
+		if cmdRet == nil {
+			return nil, errors.New("run command failed")
+		}
+		md := &ServiceModel{
 			Pid:        cmdRet.Cmd.Process.Pid,
 			ServiceId:  serviceId,
 			InstanceId: s.instanceId,
 			App:        appYaml.App,
 			AppYaml:    &appYaml,
 			Env:        appYaml.Env,
-		})
+			AgentHost:  s.sshHost,
+			AgentToken: s.sshToken,
+		}
+		return nil, insertServiceModel(session, md)
 	})
 	if err != nil && cmdRet != nil {
 		cmdRet.Kill()

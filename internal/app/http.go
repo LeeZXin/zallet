@@ -14,6 +14,7 @@ const (
 	RunningServiceStatus  = "running"
 	FailedServiceStatus   = "failed"
 	ShutdownServiceStatus = "shutdown"
+	RestartServiceStatus  = "restart"
 )
 
 type ReportStatusReq struct {
