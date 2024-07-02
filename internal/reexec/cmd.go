@@ -23,11 +23,7 @@ type AsyncCommand struct {
 }
 
 func (p *AsyncCommand) Kill() error {
-	pro := p.Cmd.Process
-	if pro != nil {
-		return util.KillNegativePid(pro.Pid)
-	}
-	return nil
+	return util.KillNegativePid(p.Cmd.Process.Pid)
 }
 
 func (p *AsyncCommand) Wait() error {
