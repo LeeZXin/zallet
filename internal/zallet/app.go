@@ -9,6 +9,7 @@ import (
 	"github.com/LeeZXin/zallet/internal/reexec"
 	"github.com/LeeZXin/zallet/internal/util"
 	"log"
+	"os"
 	"path/filepath"
 	"xorm.io/xorm"
 )
@@ -72,6 +73,7 @@ func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
 		Envs:      nil,
 	}
 	m, _ := json.Marshal(opts)
+	logger, _ := os.Create(filepath.Join(s.logDir, serviceId+".log"))
 	_, err := s.xengine.Transaction(func(session *xorm.Session) (any, error) {
 		var err2 error
 		cmdRet, err2 = reexec.RunAsyncCommand(
@@ -79,8 +81,7 @@ func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
 			fmt.Sprintf("%s service", s.appPath),
 			nil,
 			bytes.NewReader(m),
-			true,
-			filepath.Join(s.logDir, serviceId+".log"),
+			logger,
 		)
 		if err2 != nil {
 			return nil, err2

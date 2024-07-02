@@ -33,7 +33,7 @@ func (p *AsyncCommand) Wait() error {
 	}
 }
 
-func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, setPgid bool, logDir string) (*AsyncCommand, error) {
+func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, stdout io.WriteCloser) (*AsyncCommand, error) {
 	if script == "" {
 		return nil, errors.New("empty script")
 	}
@@ -63,7 +63,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, set
 		}
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: setPgid,
+		Setpgid: true,
 	}
 	stderr := new(bytes.Buffer)
 	cmd.Dir = workDir
@@ -79,17 +79,16 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, set
 		errChan: make(chan error),
 	}
 	go func() {
-		file, _ := os.Create(logDir)
-		cmd.Stdout = file
-		if file != nil {
-			defer file.Close()
+		cmd.Stdout = stdout
+		if stdout != nil {
+			defer stdout.Close()
 		}
 		defer close(ret.errChan)
 		err2 := cmd.Run()
 		if stderr.Len() > 0 {
 			i := stderr.Bytes()
-			if file != nil {
-				file.Write(i)
+			if stdout != nil {
+				stdout.Write(i)
 			}
 			err2 = errors.New(string(i))
 		}

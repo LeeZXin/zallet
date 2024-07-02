@@ -185,13 +185,13 @@ func (s *Service) reportStatus(status string, err error) {
 
 func (s *Service) start() {
 	s.reportStatus(StartingServiceStatus, nil)
+	logger, _ := os.Create(filepath.Join(s.logDir, s.serviceId+".log"))
 	cmd, err2 := reexec.RunAsyncCommand(
 		s.tempDir,
 		s.opts.Yaml.Start,
 		util.MergeEnvs(s.opts.Envs),
 		nil,
-		false,
-		filepath.Join(s.logDir, s.serviceId+".log"),
+		logger,
 	)
 	if err2 != nil {
 		s.reportStatus(FailedServiceStatus, err2)
