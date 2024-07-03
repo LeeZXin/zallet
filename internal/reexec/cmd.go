@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 )
 
 type AsyncCommand struct {
@@ -47,9 +46,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		if err != nil {
 			return nil, err
 		}
-		defer os.Remove(cmdPath)
-		cmd = exec.Command("chmod", "+x", cmdPath)
-		err = cmd.Run()
+		err = exec.Command("chmod", "+x", cmdPath).Run()
 		if err != nil {
 			return nil, err
 		}
@@ -69,6 +66,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 	cmd.Dir = workDir
 	cmd.Stdin = stdin
 	cmd.Stderr = stderr
+	cmd.Stdout = stdout
 	if len(envs) > 0 {
 		cmd.Env = append(os.Environ(), envs...)
 	} else {
@@ -76,15 +74,23 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 	}
 	ret := &AsyncCommand{
 		Cmd:     cmd,
-		errChan: make(chan error),
+		errChan: make(chan error, 1),
 	}
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		cmd.Stdout = stdout
+		if cmdPath != "" {
+			defer os.Remove(cmdPath)
+		}
 		if stdout != nil {
 			defer stdout.Close()
 		}
 		defer close(ret.errChan)
-		err2 := cmd.Run()
+		err2 := cmd.Start()
+		wg.Done()
+		if err2 == nil {
+			err2 = cmd.Wait()
+		}
 		if stderr.Len() > 0 {
 			err2 = errors.New(stderr.String())
 		}
@@ -99,18 +105,6 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		}
 		transferErr(err2)
 	}()
-	for {
-		select {
-		case err := <-ret.errChan:
-			for err == nil && cmd.Process == nil {
-				time.Sleep(time.Second)
-			}
-			return ret, err
-		default:
-			if cmd.Process != nil {
-				return ret, nil
-			}
-		}
-		time.Sleep(time.Second)
-	}
+	wg.Wait()
+	return ret, nil
 }
