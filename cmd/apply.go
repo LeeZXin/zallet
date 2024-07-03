@@ -20,12 +20,10 @@ var Apply = &cli.Command{
 	Action: apply,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "sock",
-			Usage: "zallet server sock file path",
+			Name: "sock",
 		},
 		&cli.StringFlag{
-			Name:  "file",
-			Usage: "zallet service yaml file",
+			Name: "file",
 		},
 	},
 }
@@ -53,7 +51,7 @@ func apply(ctx *cli.Context) error {
 	defer httpClient.CloseIdleConnections()
 	req, _ := json.Marshal(y)
 	resp, err := httpClient.Post(
-		"http://fake/api/apply",
+		"http://fake/api/v1/apply",
 		"application/yaml;charset=utf-8",
 		bytes.NewReader(req),
 	)

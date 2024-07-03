@@ -14,7 +14,7 @@ const (
 	RunningServiceStatus  = "running"
 	FailedServiceStatus   = "failed"
 	ShutdownServiceStatus = "shutdown"
-	RestartServiceStatus  = "restart"
+	KilledServiceStatus   = "killed"
 )
 
 type ReportStatusReq struct {
@@ -35,4 +35,13 @@ type ReportDaemonReq struct {
 type ReportDaemonResp struct {
 	Exist   bool   `json:"exist"`
 	Message string `json:"message"`
+}
+
+type ServiceVO struct {
+	ServiceId     string `json:"serviceId"`
+	App           string `json:"app"`
+	Env           string `json:"env"`
+	ServiceStatus string `json:"serviceStatus"`
+	Pid           int    `json:"pid"`
+	AgentHost     string `json:"agentHost"`
 }

@@ -13,8 +13,7 @@ var Health = &cli.Command{
 	Action: health,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "sock",
-			Usage: "zallet server sock file path",
+			Name: "sock",
 		},
 	},
 }

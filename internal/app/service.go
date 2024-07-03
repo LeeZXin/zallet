@@ -113,7 +113,7 @@ func (s *Service) reportDaemon() {
 	}
 	m, _ := json.Marshal(req)
 	resp, err := s.httpClient.Post(
-		"http://fake/api/reportDaemon",
+		"http://fake/api/v1/reportDaemon",
 		"application/json;charset=utf-8",
 		bytes.NewReader(m),
 	)
@@ -150,7 +150,7 @@ func (s *Service) reportProbe(isSuccess bool, failCount int64) {
 	}
 	m, _ := json.Marshal(req)
 	resp, err := s.httpClient.Post(
-		"http://fake/api/reportProbe",
+		"http://fake/api/v1/reportProbe",
 		"application/json;charset=utf-8",
 		bytes.NewReader(m),
 	)
@@ -174,7 +174,7 @@ func (s *Service) reportStatus(status string, err error) {
 	}
 	m, _ := json.Marshal(req)
 	resp, err := s.httpClient.Post(
-		"http://fake/api/reportStatus",
+		"http://fake/api/v1/reportStatus",
 		"application/json;charset=utf-8",
 		bytes.NewReader(m),
 	)

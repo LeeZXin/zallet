@@ -32,25 +32,93 @@ func (s *Server) ReportStatus(req app.ReportStatusReq) {
 func (s *Server) KillService(serviceId string) error {
 	session := s.xengine.NewSession()
 	defer session.Close()
-	srv, b, err := getServiceByServiceId(session, serviceId)
+	srv, b, err := getServiceByServiceIdAndInstanceId(session, serviceId, s.instanceId)
 	if err != nil {
 		return err
 	}
 	if !b {
 		return fmt.Errorf("%s is not found", serviceId)
 	}
-	if srv.InstanceId != s.instanceId {
-		return fmt.Errorf("%s belongs to instance: %s", serviceId, srv.InstanceId)
+	r := srv.StatusRevision
+	for i := 0; i < 10; i++ {
+		r++
+		b, err = updateServiceStatus(session, serviceId, app.KilledServiceStatus, r, "")
+		if err != nil {
+			log.Printf("updateServiceStatus srv: %s failed with err: %v", serviceId, err)
+			return err
+		}
+		if b {
+			log.Printf("kill service: %v pid: %v with err: %v", serviceId, srv.Pid, util.KillNegativePid(srv.Pid))
+			return nil
+		}
 	}
-	deleteServiceByServiceId(session, serviceId)
+	return fmt.Errorf("failed to update service status: %v", serviceId)
+}
+
+func (s *Server) DeleteService(serviceId string) (*app.Yaml, error) {
+	session := s.xengine.NewSession()
+	defer session.Close()
+	srv, b, err := getServiceByServiceIdAndInstanceId(session, serviceId, s.instanceId)
+	if err != nil {
+		return nil, err
+	}
+	if !b {
+		return nil, fmt.Errorf("%s is not found", serviceId)
+	}
+	_, err = deleteServiceByServiceId(session, serviceId)
+	if err != nil {
+		return nil, err
+	}
 	log.Printf("kill service: %v pid: %v with err: %v", serviceId, srv.Pid, util.KillNegativePid(srv.Pid))
-	return nil
+	return srv.AppYaml, nil
+}
+
+func (s *Server) RestartService(serviceId string) error {
+	appYaml, err := s.DeleteService(serviceId)
+	if err != nil {
+		return err
+	}
+	if appYaml == nil {
+		return fmt.Errorf("fail to restart service: %v", serviceId)
+	}
+	return s.ApplyAppYaml(*appYaml, serviceId)
+}
+
+func (s *Server) LsService(appId string, global bool, status string) ([]app.ServiceVO, error) {
+	session := s.xengine.NewSession()
+	defer session.Close()
+	if !global {
+		session.Where("instance_id = ?", s.instanceId)
+	}
+	if appId != "" {
+		session.And("app = ?", appId)
+	}
+	if status != "" {
+		session.And("service_status = ?", status)
+	}
+	ret := make([]ServiceModel, 0)
+	err := session.Desc("created").Find(&ret)
+	if err != nil {
+		return nil, err
+	}
+	voList := make([]app.ServiceVO, 0, len(ret))
+	for _, md := range ret {
+		voList = append(voList, app.ServiceVO{
+			ServiceId:     md.ServiceId,
+			App:           md.App,
+			Env:           md.Env,
+			ServiceStatus: md.ServiceStatus,
+			Pid:           md.Pid,
+			AgentHost:     md.AgentHost,
+		})
+	}
+	return voList, nil
 }
 
 func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
 	session := s.xengine.NewSession()
 	defer session.Close()
-	srv, b, err := getServiceByServiceId(session, req.ServiceId)
+	srv, b, err := getServiceByServiceIdAndInstanceId(session, req.ServiceId, s.instanceId)
 	// 数据库的错误忽略
 	if err != nil {
 		log.Printf("updateServiceStatus :%v failed with err: %v", req.ServiceId, err)
@@ -62,8 +130,7 @@ func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
 	return nil
 }
 
-func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
-	serviceId := util.RandomUuid()
+func (s *Server) ApplyAppYaml(appYaml app.Yaml, serviceId string) error {
 	var cmdRet *reexec.AsyncCommand
 	opts := app.ServiceOpts{
 		ServiceId: serviceId,

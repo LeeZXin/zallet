@@ -12,7 +12,10 @@ var (
 		Service,
 		Health,
 		Kill,
+		Delete,
+		Restart,
 		SshAgent,
+		Ls,
 	}
 )
 

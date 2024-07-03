@@ -11,8 +11,7 @@ var Run = &cli.Command{
 	Action: run,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "baseDir",
-			Usage: "zallet baseDir flag",
+			Name: "baseDir",
 		},
 	},
 	Hidden: true,

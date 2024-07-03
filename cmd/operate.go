@@ -9,23 +9,35 @@ import (
 	"net/http"
 )
 
-var Kill = &cli.Command{
-	Name:   "kill",
-	Usage:  "This command kill process service",
-	Action: kill,
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  "sock",
-			Usage: "zallet server sock file path",
+var (
+	Kill    = newOperateCommand("kill")
+	Delete  = newOperateCommand("delete")
+	Restart = newOperateCommand("restart")
+)
+
+func newOperateCommand(op string) *cli.Command {
+	return &cli.Command{
+		Name:   op,
+		Usage:  "This command " + op + " process service",
+		Action: operate(op),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name: "sock",
+			},
+			&cli.StringFlag{
+				Name: "service",
+			},
 		},
-		&cli.StringFlag{
-			Name:  "service",
-			Usage: "service id",
-		},
-	},
+	}
 }
 
-func kill(ctx *cli.Context) error {
+func operate(op string) func(ctx *cli.Context) error {
+	return func(ctx *cli.Context) error {
+		return putService(ctx, op)
+	}
+}
+
+func putService(ctx *cli.Context, operation string) error {
 	serviceId := ctx.String("service")
 	if serviceId == "" {
 		return errors.New("invalid -service")
@@ -33,7 +45,7 @@ func kill(ctx *cli.Context) error {
 	sockFile := getSockFile(ctx)
 	httpClient := util.NewUnixHttpClient(sockFile)
 	defer httpClient.CloseIdleConnections()
-	request, err := http.NewRequest(http.MethodDelete, "http://fake/api/kill/"+serviceId, nil)
+	request, err := http.NewRequest(http.MethodPut, fmt.Sprintf("http://fake/api/v1/%s/%s", operation, serviceId), nil)
 	if err != nil {
 		return err
 	}
@@ -49,5 +61,6 @@ func kill(ctx *cli.Context) error {
 		}
 		return fmt.Errorf("zallet return http request statusCode: %v resp: %v", resp.StatusCode, string(message))
 	}
+	fmt.Println("ok")
 	return nil
 }

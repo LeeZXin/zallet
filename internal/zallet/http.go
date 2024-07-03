@@ -5,6 +5,7 @@ import (
 	"github.com/LeeZXin/zallet/internal/app"
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/cast"
 	"log"
 	"net"
 	"net/http"
@@ -16,10 +17,16 @@ import (
 )
 
 func registerHandler(e *gin.Engine) {
-	group := e.Group("/api")
+	group := e.Group("/api/v1")
 	{
+		// 查询服务
+		group.GET("/ls", lsService)
+		// 删除服务
+		group.PUT("/delete/:serviceId", deleteService)
 		// 杀死服务
-		group.DELETE("/kill/:serviceId", killService)
+		group.PUT("/kill/:serviceId", killService)
+		// 杀死服务
+		group.PUT("/restart/:serviceId", restartService)
 		// 探针
 		group.GET("/health", health)
 		// 启动服务
@@ -53,12 +60,20 @@ func (s *Server) checkServiceExist() {
 			Iterate(new(ServiceModel), func(_ int, bean interface{}) error {
 				sm := bean.(*ServiceModel)
 				err := exec.Command("kill", "-0", strconv.Itoa(sm.Pid)).Run()
+				// 理应被kill 但进程还存在的
+				if sm.ServiceStatus == app.KilledServiceStatus {
+					if err == nil {
+						log.Printf("checkServiceExist kill service: %s pid: %v", sm.ServiceId, sm.Pid)
+					}
+					return nil
+				}
+				// 其他状态的进程都应该存在
 				if err != nil {
 					session := s.xengine.NewSession()
 					defer session.Close()
-					_, err2 := deleteServiceByServiceId(session, sm.ServiceId)
+					_, err = deleteServiceByServiceId(session, sm.ServiceId)
 					log.Printf("checkServiceExist delete service: %s pid: %v", sm.ServiceId, sm.Pid)
-					return err2
+					return err
 				}
 				return nil
 			})
@@ -103,13 +118,22 @@ func applyAppYaml(c *gin.Context) {
 			c.String(http.StatusBadRequest, "bad request")
 			return
 		}
-		err := server.ApplyAppYaml(req)
+		err := server.ApplyAppYaml(req, util.RandomUuid())
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 		c.String(http.StatusOK, "ok")
 	}
+}
+
+func lsService(c *gin.Context) {
+	srvs, err := server.LsService(c.Query("app"), cast.ToBool(c.Query("global")), c.Query("status"))
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, srvs)
 }
 
 func health(c *gin.Context) {
@@ -149,6 +173,24 @@ func reportProbe(c *gin.Context) {
 
 func killService(c *gin.Context) {
 	err := server.KillService(c.Param("serviceId"))
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.String(http.StatusOK, "ok")
+}
+
+func deleteService(c *gin.Context) {
+	_, err := server.DeleteService(c.Param("serviceId"))
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.String(http.StatusOK, "ok")
+}
+
+func restartService(c *gin.Context) {
+	err := server.RestartService(c.Param("serviceId"))
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return

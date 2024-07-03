@@ -15,8 +15,7 @@ var SshAgent = &cli.Command{
 	Action: sshAgent,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "baseDir",
-			Usage: "zallet baseDir flag",
+			Name: "baseDir",
 		},
 	},
 }

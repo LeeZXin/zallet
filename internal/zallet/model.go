@@ -47,9 +47,12 @@ func updateServiceStatus(session *xorm.Session, serviceId string, serviceStatus 
 	return rows == 1, err
 }
 
-func getServiceByServiceId(session *xorm.Session, serviceId string) (ServiceModel, bool, error) {
+func getServiceByServiceIdAndInstanceId(session *xorm.Session, serviceId, instanceId string) (ServiceModel, bool, error) {
 	var ret ServiceModel
-	b, err := session.Where("service_id = ?", serviceId).Get(&ret)
+	b, err := session.
+		Where("service_id = ?", serviceId).
+		And("instance_id = ?", instanceId).
+		Get(&ret)
 	return ret, b, err
 }
 

@@ -529,12 +529,12 @@ func NewAgentServer(baseDir string) *AgentServer {
 				return
 			}
 			cmdPath := filepath.Join(tempDir, taskId)
-			file, err := os.OpenFile(cmdPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+			file, err := os.Create(cmdPath)
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			defer util.RemoveAll(cmdPath)
+			defer util.RemoveAll(tempDir)
 			_, err = io.Copy(file, session)
 			file.Close()
 			if err != nil {
@@ -622,7 +622,8 @@ func NewAgentServer(baseDir string) *AgentServer {
 					returnErrMsg(session, "invalid service")
 					return
 				}
-				workdir = filepath.Join(agent.servicesDir, service)
+				workdir = filepath.Join(agent.servicesDir, service, util.RandomUuid())
+				defer os.Remove(workdir)
 			} else {
 				workdir = agent.workflowDir
 			}
