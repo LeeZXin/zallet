@@ -534,7 +534,6 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			defer util.RemoveAll(tempDir)
 			_, err = io.Copy(file, session)
 			file.Close()
 			if err != nil {
@@ -623,7 +622,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 					return
 				}
 				workdir = filepath.Join(agent.servicesDir, service, util.RandomUuid())
-				defer os.Remove(workdir)
+				defer os.RemoveAll(workdir)
 			} else {
 				workdir = agent.workflowDir
 			}

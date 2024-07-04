@@ -13,4 +13,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	os.Exit(0)
 }

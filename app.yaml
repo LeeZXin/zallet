@@ -1,5 +1,5 @@
 env: sit
-app: zallet-fuck-fuck-fuck-fuck-fuck
+app: ttt
 start: |
   set -e
   sleep 20
