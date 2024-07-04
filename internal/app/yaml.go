@@ -32,9 +32,6 @@ func (f *Yaml) IsValid() error {
 }
 
 func (f *Yaml) FromDB(content []byte) error {
-	if f == nil {
-		*f = Yaml{}
-	}
 	return json.Unmarshal(content, f)
 }
 
