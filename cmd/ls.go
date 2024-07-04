@@ -67,13 +67,11 @@ func ls(ctx *cli.Context) error {
 		}
 		return nil
 	}
+	rows := []string{"serviceId", "app", "env", "serviceStatus", "pid", "agentHost"}
 	maxVarLength := make([]int, 6)
-	maxVarLength[0] = len("serviceId")
-	maxVarLength[1] = len("app")
-	maxVarLength[2] = len("env")
-	maxVarLength[3] = len("serviceStatus")
-	maxVarLength[4] = len("pid")
-	maxVarLength[5] = len("agentHost")
+	for i := 0; i < 6; i++ {
+		maxVarLength[i] = len(rows[i])
+	}
 	for _, vo := range ret {
 		p := len(vo.ServiceId)
 		if maxVarLength[0] < p {
@@ -104,12 +102,12 @@ func ls(ctx *cli.Context) error {
 		return str + strings.Repeat(" ", l-len(str))
 	}
 	fmt.Println(fmt.Sprintf("%s  %s  %s  %s  %s  %s",
-		padding("serviceId", maxVarLength[0]),
-		padding("app", maxVarLength[1]),
-		padding("env", maxVarLength[2]),
-		padding("serviceStatus", maxVarLength[3]),
-		padding("pid", maxVarLength[4]),
-		padding("agentHost", maxVarLength[5]),
+		padding(rows[0], maxVarLength[0]),
+		padding(rows[1], maxVarLength[1]),
+		padding(rows[2], maxVarLength[2]),
+		padding(rows[3], maxVarLength[3]),
+		padding(rows[4], maxVarLength[4]),
+		padding(rows[5], maxVarLength[5]),
 	))
 	for _, vo := range ret {
 		fmt.Println(fmt.Sprintf("%s  %s  %s  %s  %s  %s",
