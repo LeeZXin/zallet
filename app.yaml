@@ -1,5 +1,5 @@
 env: sit
-app: ttt
+app: rrr
 start: |
   set -e
   sleep 20
