@@ -18,7 +18,6 @@ type ServiceModel struct {
 	ErrLog         string    `json:"errLog"`
 	ProbeTimestamp int64     `json:"probeTimestamp"`
 	ProbeFailCount int64     `json:"probeFailCount"`
-	ProbeRevision  uint64    `json:"probeRevision"`
 	AgentHost      string    `json:"agentHost"`
 	AgentToken     string    `json:"agentToken"`
 	Env            string    `json:"env"`
@@ -61,15 +60,13 @@ func deleteServiceByServiceId(session *xorm.Session, serviceId string) (bool, er
 	return rows == 1, err
 }
 
-func updateServiceProbe(session *xorm.Session, serviceId string, eventTime int64, failCount int64, revision uint64) (bool, error) {
+func updateServiceProbe(session *xorm.Session, serviceId string, eventTime int64, failCount int64) (bool, error) {
 	rows, err := session.
 		Where("service_id = ?", serviceId).
-		And("probe_revision < ?", revision).
-		Cols("probe_timestamp", "probe_fail_count", "probe_revision").
+		Cols("probe_timestamp", "probe_fail_count").
 		Update(&ServiceModel{
 			ProbeTimestamp: eventTime,
 			ProbeFailCount: failCount,
-			ProbeRevision:  revision,
 		})
 	return rows == 1, err
 }

@@ -27,7 +27,6 @@ type Service struct {
 	ctx             context.Context
 	cancelCauseFunc context.CancelCauseFunc
 	serviceCmd      atomic.Value
-	probeRevision   atomic.Uint64
 	statusRevision  atomic.Uint64
 	httpClient      *http.Client
 	startTime       int64
@@ -143,7 +142,6 @@ func (s *Service) reportProbe(isSuccess bool, failCount int64) {
 	req := ReportProbeReq{
 		ServiceId: s.serviceId,
 		EventTime: time.Now().UnixMilli(),
-		Revision:  s.probeRevision.Add(1),
 		IsSuccess: isSuccess,
 		Pid:       s.pid,
 		FailCount: failCount,

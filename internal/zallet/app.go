@@ -186,7 +186,6 @@ func (s *Server) ReportProbe(req app.ReportProbeReq) {
 		req.ServiceId,
 		probeTs,
 		req.FailCount,
-		req.Revision,
 	)
 	if err != nil {
 		log.Printf("updateServiceStatus :%v failed with err: %v", req.ServiceId, err)

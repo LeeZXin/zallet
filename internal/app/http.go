@@ -6,7 +6,6 @@ type ReportProbeReq struct {
 	IsSuccess bool   `json:"isSuccess"`
 	FailCount int64  `json:"failCount"`
 	Pid       int    `json:"pid"`
-	Revision  uint64 `json:"revision"`
 }
 
 const (
