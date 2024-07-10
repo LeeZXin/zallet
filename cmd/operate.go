@@ -61,6 +61,6 @@ func putService(ctx *cli.Context, operation string) error {
 		}
 		return fmt.Errorf("zallet return http request statusCode: %v resp: %v", resp.StatusCode, string(message))
 	}
-	fmt.Println("ok")
+	fmt.Println(fmt.Sprintf("%s ok", serviceId))
 	return nil
 }

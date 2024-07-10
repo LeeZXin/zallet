@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 	"xorm.io/xorm"
 )
 
@@ -29,6 +30,20 @@ func (s *Server) ReportStatus(req app.ReportStatusReq) {
 	}
 }
 
+func (s *Server) ReportStat(req app.ReportStatReq) {
+	session := s.xengine.NewSession()
+	defer session.Close()
+	_, err := updateCpuAndMemPercent(
+		session,
+		req.ServiceId,
+		req.CpuPercent,
+		req.MemPercent,
+	)
+	if err != nil {
+		log.Printf("updateCpuAndMemPercent :%v failed with err: %v", req.ServiceId, err)
+	}
+}
+
 func (s *Server) KillService(serviceId string) error {
 	session := s.xengine.NewSession()
 	defer session.Close()
@@ -40,9 +55,9 @@ func (s *Server) KillService(serviceId string) error {
 		return fmt.Errorf("%s is not found", serviceId)
 	}
 	r := srv.StatusRevision
-	for i := 0; i < 10; i++ {
+	for {
 		r++
-		b, err = updateServiceStatus(session, serviceId, app.KilledServiceStatus, r, "")
+		b, err = killServiceStatus(session, serviceId, r)
 		if err != nil {
 			log.Printf("updateServiceStatus srv: %s failed with err: %v", serviceId, err)
 			return err
@@ -51,8 +66,8 @@ func (s *Server) KillService(serviceId string) error {
 			log.Printf("kill service: %v pid: %v with err: %v", serviceId, srv.Pid, util.KillNegativePid(srv.Pid))
 			return nil
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	return fmt.Errorf("failed to update service status: %v", serviceId)
 }
 
 func (s *Server) DeleteService(serviceId string) (*app.Yaml, error) {
@@ -81,7 +96,7 @@ func (s *Server) RestartService(serviceId string) error {
 	if appYaml == nil {
 		return fmt.Errorf("fail to restart service: %v", serviceId)
 	}
-	return s.ApplyAppYaml(*appYaml, serviceId)
+	return s.ApplyAppYaml(*appYaml)
 }
 
 func (s *Server) LsService(appId string, global bool, status string) ([]app.ServiceVO, error) {
@@ -130,7 +145,8 @@ func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
 	return nil
 }
 
-func (s *Server) ApplyAppYaml(appYaml app.Yaml, serviceId string) error {
+func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
+	serviceId := util.RandomUuid()
 	var cmdRet *reexec.AsyncCommand
 	opts := app.ServiceOpts{
 		ServiceId: serviceId,
@@ -157,14 +173,15 @@ func (s *Server) ApplyAppYaml(appYaml app.Yaml, serviceId string) error {
 			return nil, errors.New("run command failed")
 		}
 		md := &ServiceModel{
-			Pid:        cmdRet.Cmd.Process.Pid,
-			ServiceId:  serviceId,
-			InstanceId: s.instanceId,
-			App:        appYaml.App,
-			AppYaml:    &appYaml,
-			Env:        appYaml.Env,
-			AgentHost:  s.sshHost,
-			AgentToken: s.sshToken,
+			Pid:           cmdRet.Cmd.Process.Pid,
+			ServiceId:     serviceId,
+			ServiceStatus: app.PendingServiceStatus,
+			InstanceId:    s.instanceId,
+			App:           appYaml.App,
+			AppYaml:       &appYaml,
+			Env:           appYaml.Env,
+			AgentHost:     s.sshHost,
+			AgentToken:    s.sshToken,
 		}
 		return nil, insertServiceModel(session, md)
 	})

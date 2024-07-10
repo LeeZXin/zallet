@@ -37,6 +37,8 @@ func registerHandler(e *gin.Engine) {
 		group.POST("/reportStatus", reportStatus)
 		// 上报探针
 		group.POST("/reportProbe", reportProbe)
+		// 上报cpu和内存
+		group.POST("/reportStat", reportStat)
 	}
 }
 
@@ -111,6 +113,14 @@ func (s *Server) startHttpServer() {
 	}()
 }
 
+func reportStat(c *gin.Context) {
+	var req app.ReportStatReq
+	if util.ShouldBindJSON(&req, c) {
+		server.ReportStat(req)
+		c.String(http.StatusOK, "")
+	}
+}
+
 func applyAppYaml(c *gin.Context) {
 	var req app.Yaml
 	if util.ShouldBindYAML(&req, c) {
@@ -118,7 +128,7 @@ func applyAppYaml(c *gin.Context) {
 			c.String(http.StatusBadRequest, "bad request")
 			return
 		}
-		err := server.ApplyAppYaml(req, util.RandomUuid())
+		err := server.ApplyAppYaml(req)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return

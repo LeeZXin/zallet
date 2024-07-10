@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/LeeZXin/zallet/internal/reexec"
 	"github.com/LeeZXin/zallet/internal/util"
+	"github.com/shirou/gopsutil/v3/process"
 	"io"
 	"log"
 	"net/http"
@@ -94,13 +95,55 @@ func RunService(opts ServiceOpts) (*Service, error) {
 	if opts.Yaml.Probe != nil {
 		go srv.runProbe()
 	}
+	go srv.runStat()
 	return srv, nil
 }
 
 func (s *Service) runDaemon() {
 	for s.ctx.Err() == nil {
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 		s.reportDaemon()
+	}
+}
+
+func (s *Service) runStat() {
+	for s.ctx.Err() == nil {
+		time.Sleep(time.Second)
+		s.reportStat()
+	}
+}
+
+func (s *Service) reportStat() {
+	req := ReportStatReq{
+		ServiceId: s.serviceId,
+	}
+	val := s.serviceCmd.Load()
+	if val != nil {
+		cmd := val.(*reexec.AsyncCommand)
+		if cmd.Cmd.Process != nil {
+			pcs, err := process.NewProcess(int32(cmd.Cmd.Process.Pid))
+			if err == nil {
+				cpuPercent, err := pcs.CPUPercent()
+				if err == nil {
+					req.CpuPercent = int(cpuPercent * 100)
+				}
+				memPercent, err := pcs.MemoryPercent()
+				if err == nil {
+					req.MemPercent = int(memPercent * 100)
+				}
+			}
+		}
+	}
+	m, _ := json.Marshal(req)
+	resp, err := s.httpClient.Post(
+		"http://fake/api/v1/reportStat",
+		"application/json;charset=utf-8",
+		bytes.NewReader(m),
+	)
+	if err == nil {
+		resp.Body.Close()
+	} else {
+		log.Printf("reportStat failed with err: %v", err)
 	}
 }
 
@@ -129,7 +172,7 @@ func (s *Service) reportDaemon() {
 				return
 			}
 			if !rdr.Exist {
-				s.Shutdown(errors.New(rdr.Message))
+				s.Shutdown(errors.New(rdr.Message), true)
 				s.ShutdownChan <- struct{}{}
 			}
 		}
@@ -205,19 +248,21 @@ func (s *Service) start() {
 	}
 }
 
-func (s *Service) Shutdown(err error) {
+func (s *Service) Shutdown(err error, shouldKill bool) {
 	s.reportStatus(ShutdownServiceStatus, err)
 	s.cancelCauseFunc(err)
-	srv := s.serviceCmd.Load()
-	if srv != nil {
-		srv.(*reexec.AsyncCommand).Kill()
+	if shouldKill {
+		srv := s.serviceCmd.Load()
+		if srv != nil {
+			srv.(*reexec.AsyncCommand).Kill()
+		}
 	}
 }
 
 func (s *Service) runProbe() {
 	var failed int64 = 0
 	for s.ctx.Err() == nil {
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 		probeRet := runProbe(s.opts.Yaml.Probe)
 		if probeRet {
 			failed = 0
@@ -225,7 +270,7 @@ func (s *Service) runProbe() {
 			failed += 1
 		}
 		s.reportProbe(probeRet, failed)
-		if failed > 0 && failed%3 == 0 {
+		if failed > 0 && failed%5 == 0 {
 			// 重启服务
 			s.restart()
 			failed = 0

@@ -30,6 +30,6 @@ func health(ctx *cli.Context) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server return http status code: %v", resp.StatusCode)
 	}
-	println("ok")
+	fmt.Println("ok")
 	return nil
 }

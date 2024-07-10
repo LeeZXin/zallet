@@ -21,6 +21,8 @@ type ServiceModel struct {
 	AgentHost      string    `json:"agentHost"`
 	AgentToken     string    `json:"agentToken"`
 	Env            string    `json:"env"`
+	CpuPercent     int       `json:"cpuPercent"`
+	MemPercent     int       `json:"memPercent"`
 	Created        time.Time `json:"created" xorm:"created"`
 }
 
@@ -46,6 +48,21 @@ func updateServiceStatus(session *xorm.Session, serviceId string, serviceStatus 
 	return rows == 1, err
 }
 
+func killServiceStatus(session *xorm.Session, serviceId string, statusRevision uint64) (bool, error) {
+	rows, err := session.
+		Where("service_id = ?", serviceId).
+		And("status_revision < ?", statusRevision).
+		Cols("service_status", "status_revision", "err_log", "cpu_percent", "mem_percent").
+		Update(&ServiceModel{
+			ServiceStatus:  app.KilledServiceStatus,
+			StatusRevision: statusRevision,
+			ErrLog:         "",
+			CpuPercent:     0,
+			MemPercent:     0,
+		})
+	return rows == 1, err
+}
+
 func getServiceByServiceIdAndInstanceId(session *xorm.Session, serviceId, instanceId string) (ServiceModel, bool, error) {
 	var ret ServiceModel
 	b, err := session.
@@ -56,7 +73,9 @@ func getServiceByServiceIdAndInstanceId(session *xorm.Session, serviceId, instan
 }
 
 func deleteServiceByServiceId(session *xorm.Session, serviceId string) (bool, error) {
-	rows, err := session.Where("service_id = ?", serviceId).Delete(new(ServiceModel))
+	rows, err := session.
+		Where("service_id = ?", serviceId).
+		Delete(new(ServiceModel))
 	return rows == 1, err
 }
 
@@ -67,6 +86,16 @@ func updateServiceProbe(session *xorm.Session, serviceId string, eventTime int64
 		Update(&ServiceModel{
 			ProbeTimestamp: eventTime,
 			ProbeFailCount: failCount,
+		})
+	return rows == 1, err
+}
+
+func updateCpuAndMemPercent(session *xorm.Session, serviceId string, cpuPercent, memPercent int) (bool, error) {
+	rows, err := session.Where("service_id = ?", serviceId).
+		Cols("cpu_percent", "mem_percent").
+		Update(&ServiceModel{
+			CpuPercent: cpuPercent,
+			MemPercent: memPercent,
 		})
 	return rows == 1, err
 }

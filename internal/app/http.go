@@ -9,6 +9,7 @@ type ReportProbeReq struct {
 }
 
 const (
+	PendingServiceStatus  = "pending"
 	StartingServiceStatus = "starting"
 	RunningServiceStatus  = "running"
 	FailedServiceStatus   = "failed"
@@ -29,6 +30,12 @@ type ReportDaemonReq struct {
 	ServiceId string `json:"serviceId"`
 	Pid       int    `json:"pid"`
 	EventTime int64  `json:"eventTime"`
+}
+
+type ReportStatReq struct {
+	ServiceId  string `json:"serviceId"`
+	CpuPercent int    `json:"cpuPercent"`
+	MemPercent int    `json:"memPercent"`
 }
 
 type ReportDaemonResp struct {

@@ -578,7 +578,9 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, "unknown taskId")
 				return
 			}
-			log.Printf("kill taskId: %s with err: %v", taskId, util.KillPid(cmd.Process.Pid))
+			if cmd.Process != nil {
+				log.Printf("kill taskId: %s with err: %v", taskId, util.KillPid(cmd.Process.Pid))
+			}
 			session.Exit(0)
 		},
 	}

@@ -5,7 +5,6 @@ import (
 	"github.com/LeeZXin/zallet/internal/app"
 	"github.com/urfave/cli/v2"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,8 +35,7 @@ func service(ctx *cli.Context) error {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-quit:
-		log.Println("receive signal")
-		srv.Shutdown(nil)
+		srv.Shutdown(nil, false)
 	case <-srv.ShutdownChan:
 	}
 	return nil

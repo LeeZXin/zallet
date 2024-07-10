@@ -25,9 +25,6 @@ func (f *Yaml) IsValid() error {
 	if f.Start == "" {
 		return errors.New("invalid start")
 	}
-	if f.Probe != nil && !f.Probe.IsValid() {
-		return errors.New("invalid probe")
-	}
 	return nil
 }
 
