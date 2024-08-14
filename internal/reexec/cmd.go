@@ -75,12 +75,15 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 	} else {
 		cmd.Env = os.Environ()
 	}
+	// 先启动命令
+	err := cmd.Start()
+	if err != nil {
+		return nil, err
+	}
 	ret := &AsyncCommand{
 		Cmd:     cmd,
 		errChan: make(chan error, 1),
 	}
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		if cmdPath != "" {
 			defer os.Remove(cmdPath)
@@ -89,11 +92,7 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 			defer stdout.Close()
 		}
 		defer close(ret.errChan)
-		err2 := cmd.Start()
-		wg.Done()
-		if err2 == nil {
-			err2 = cmd.Wait()
-		}
+		err2 := cmd.Wait()
 		if stderr.Len() > 0 {
 			err2 = errors.New(stderr.String())
 		}
@@ -108,6 +107,5 @@ func RunAsyncCommand(workDir, script string, envs []string, stdin io.Reader, std
 		}
 		transferErr(err2)
 	}()
-	wg.Wait()
 	return ret, nil
 }

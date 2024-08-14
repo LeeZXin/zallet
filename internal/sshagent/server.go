@@ -31,7 +31,7 @@ var (
 	httpClient                *http.Client
 )
 
-type handler func(ssh.Session, map[string]string, string, string)
+type handler func(ssh.Session, map[string]string)
 
 type AgentServer struct {
 	*zssh.Server
@@ -302,7 +302,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 	agent.workflowDir = filepath.Join(baseDir, "workflow")
 	agent.servicesDir = filepath.Join(baseDir, "services")
 	agent.handlerMap = map[string]handler{
-		"getWorkflowStepLog": func(session ssh.Session, args map[string]string, _ string, _ string) {
+		"getWorkflowStepLog": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
@@ -331,7 +331,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 			}
 			session.Exit(0)
 		},
-		"getWorkflowTaskOrigin": func(session ssh.Session, args map[string]string, _ string, _ string) {
+		"getWorkflowTaskOrigin": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
@@ -346,7 +346,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 			session.Write(origin)
 			session.Exit(0)
 		},
-		"getWorkflowTaskStatus": func(session ssh.Session, args map[string]string, _ string, _ string) {
+		"getWorkflowTaskStatus": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid id")
@@ -357,7 +357,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 			fmt.Fprint(session, string(m)+"\n")
 			session.Exit(0)
 		},
-		"executeWorkflow": func(session ssh.Session, args map[string]string, workDir string, tempDir string) {
+		"executeWorkflow": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			if !validWorkflowTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid task id")
@@ -392,7 +392,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				return
 			}
 			if exist {
-				returnErrMsg(session, "duplicated biz id")
+				returnErrMsg(session, "duplicated task id")
 				return
 			}
 			err = os.MkdirAll(logDir, os.ModePerm)
@@ -422,7 +422,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 					Status: RunningStatus,
 				})
 				err := graph.Run(action.RunOpts{
-					Workdir: filepath.Join(workDir, "temp", taskId),
+					Workdir: filepath.Join(agent.workflowDir, "temp", taskId),
 					StepOutputFunc: func(stat action.StepOutputStat) {
 						defer stat.Output.Close()
 						stepDir := filepath.Join(logDir, stat.JobName, strconv.Itoa(stat.Index))
@@ -505,7 +505,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 			}
 			session.Exit(0)
 		},
-		"killWorkflow": func(session ssh.Session, args map[string]string, _, _ string) {
+		"killWorkflow": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			graph := agent.graphMap.GetById(taskId)
 			if graph == nil {
@@ -517,7 +517,19 @@ func NewAgentServer(baseDir string) *AgentServer {
 			graph.Cancel(action.TaskCancelErr)
 			session.Exit(0)
 		},
-		"execute": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
+		"execute": func(session ssh.Session, args map[string]string) {
+			service := args["s"]
+			if service == "" {
+				returnErrMsg(session, "invalid service")
+				return
+			}
+			workdir := filepath.Join(agent.servicesDir, service)
+			tempDir := filepath.Join(workdir, "temp")
+			err := os.MkdirAll(tempDir, os.ModePerm)
+			if err != nil {
+				returnErrMsg(session, err.Error())
+				return
+			}
 			taskId := args["i"]
 			if !validStageTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid taskId")
@@ -567,7 +579,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 			}
 			session.Exit(0)
 		},
-		"kill": func(session ssh.Session, args map[string]string, workdir, tempDir string) {
+		"kill": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
 			if !validStageTaskIdRegexp.MatchString(taskId) {
 				returnErrMsg(session, "invalid taskId")
@@ -616,26 +628,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, "invalid Token")
 				return
 			}
-			var workdir string
-			if cmd.Operation == "execute" {
-				service := cmd.Args["s"]
-				if service == "" {
-					returnErrMsg(session, "invalid service")
-					return
-				}
-				workdir = filepath.Join(agent.servicesDir, service, util.RandomUuid())
-				defer os.RemoveAll(workdir)
-			} else {
-				workdir = agent.workflowDir
-			}
-			// 创建临时目录
-			tempDir := filepath.Join(workdir, "temp")
-			err = os.MkdirAll(tempDir, os.ModePerm)
-			if err != nil {
-				returnErrMsg(session, err.Error())
-				return
-			}
-			fn(session, cmd.Args, workdir, tempDir)
+			fn(session, cmd.Args)
 		},
 	})
 	if err != nil {

@@ -62,14 +62,10 @@ func RunService(opts ServiceOpts) (*Service, error) {
 	if err := opts.IsValid(); err != nil {
 		return nil, err
 	}
-	serviceDir := filepath.Join(opts.BaseDir, opts.Yaml.App)
+	serviceDir := filepath.Join(opts.BaseDir, "app", opts.Yaml.App)
 	logDir := filepath.Join(serviceDir, "log")
-	err := os.MkdirAll(logDir, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
 	tempDir := filepath.Join(serviceDir, "temp")
-	err = os.MkdirAll(tempDir, os.ModePerm)
+	err := os.MkdirAll(tempDir, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +116,7 @@ func (s *Service) reportStat() {
 	val := s.serviceCmd.Load()
 	if val != nil {
 		cmd := val.(*reexec.AsyncCommand)
-		if cmd.Cmd.Process != nil {
+		if cmd != nil && cmd.Cmd.Process != nil {
 			pcs, err := process.NewProcess(int32(cmd.Cmd.Process.Pid))
 			if err == nil {
 				cpuPercent, err := pcs.CPUPercent()
@@ -226,24 +222,30 @@ func (s *Service) reportStatus(status string, err error) {
 
 func (s *Service) start() {
 	s.reportStatus(StartingServiceStatus, nil)
-	logger, _ := os.Create(filepath.Join(s.logDir, s.serviceId+".log"))
-	cmd, err2 := reexec.RunAsyncCommand(
-		s.tempDir,
-		s.opts.Yaml.Start,
-		util.MergeEnvs(s.opts.Envs),
-		nil,
-		logger,
-	)
-	if err2 != nil {
-		s.reportStatus(FailedServiceStatus, err2)
+	dir := filepath.Join(s.logDir, s.serviceId[:4], s.serviceId[4:6], s.serviceId[6:8])
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		s.reportStatus(FailedServiceStatus, err)
 	} else {
-		s.reportStatus(RunningServiceStatus, nil)
-		s.serviceCmd.Store(cmd)
-		err2 = cmd.Wait()
-		if err2 == nil {
-			s.reportStatus(ShutdownServiceStatus, nil)
+		logger, _ := os.Create(filepath.Join(dir, s.serviceId+".log"))
+		cmd, err := reexec.RunAsyncCommand(
+			s.tempDir,
+			s.opts.Yaml.Start,
+			util.MergeEnvs(s.opts.Envs),
+			nil,
+			logger,
+		)
+		if err != nil {
+			s.reportStatus(FailedServiceStatus, err)
 		} else {
-			s.reportStatus(FailedServiceStatus, err2)
+			s.reportStatus(RunningServiceStatus, nil)
+			s.serviceCmd.Store(cmd)
+			err = cmd.Wait()
+			if err == nil {
+				s.reportStatus(ShutdownServiceStatus, nil)
+			} else {
+				s.reportStatus(FailedServiceStatus, err)
+			}
 		}
 	}
 }
@@ -252,17 +254,29 @@ func (s *Service) Shutdown(err error, shouldKill bool) {
 	s.reportStatus(ShutdownServiceStatus, err)
 	s.cancelCauseFunc(err)
 	if shouldKill {
-		srv := s.serviceCmd.Load()
-		if srv != nil {
-			srv.(*reexec.AsyncCommand).Kill()
+		val := s.serviceCmd.Load()
+		if val != nil {
+			cmd := val.(*reexec.AsyncCommand)
+			if cmd != nil {
+				cmd.Kill()
+			}
 		}
 	}
 }
 
 func (s *Service) runProbe() {
 	var failed int64 = 0
+	delay, err := time.ParseDuration(s.opts.Yaml.Probe.Delay)
+	if err != nil || delay < time.Second {
+		delay = 10 * time.Second
+	}
+	interval, err := time.ParseDuration(s.opts.Yaml.Probe.Interval)
+	if err != nil || interval < time.Second {
+		interval = time.Second
+	}
+	log.Printf("start probe delay: %v, interval: %v", delay, interval)
+	time.Sleep(delay)
 	for s.ctx.Err() == nil {
-		time.Sleep(2 * time.Second)
 		probeRet := runProbe(s.opts.Yaml.Probe)
 		if probeRet {
 			failed = 0
@@ -270,11 +284,12 @@ func (s *Service) runProbe() {
 			failed += 1
 		}
 		s.reportProbe(probeRet, failed)
-		if failed > 0 && failed%5 == 0 {
+		if failed > 0 && failed%3 == 0 {
 			// 重启服务
-			s.restart()
+			go s.restart()
 			failed = 0
 		}
+		time.Sleep(interval)
 	}
 }
 

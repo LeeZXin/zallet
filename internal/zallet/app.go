@@ -146,7 +146,8 @@ func (s *Server) ReportDaemon(req app.ReportDaemonReq) error {
 }
 
 func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
-	serviceId := util.RandomUuid()
+	now := time.Now().Format("20060102150405")
+	serviceId := now + util.RandomUuid()[14:]
 	var cmdRet *reexec.AsyncCommand
 	opts := app.ServiceOpts{
 		ServiceId: serviceId,
@@ -156,8 +157,16 @@ func (s *Server) ApplyAppYaml(appYaml app.Yaml) error {
 		Envs:      nil,
 	}
 	m, _ := json.Marshal(opts)
-	logger, _ := os.Create(filepath.Join(s.logDir, serviceId+".log"))
-	_, err := s.xengine.Transaction(func(session *xorm.Session) (any, error) {
+	dir := filepath.Join(s.logDir, now[:4], now[4:6], now[6:8])
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	logger, err := os.Create(filepath.Join(dir, serviceId+".log"))
+	if err != nil {
+		return err
+	}
+	_, err = s.xengine.Transaction(func(session *xorm.Session) (any, error) {
 		var err2 error
 		cmdRet, err2 = reexec.RunAsyncCommand(
 			s.tempDir,

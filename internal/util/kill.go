@@ -14,10 +14,8 @@ func KillNegativePid(pid int) error {
 			errChan <- err
 		}
 	}()
-	t := time.NewTimer(30 * time.Second)
-	defer t.Stop()
 	select {
-	case <-t.C:
+	case <-time.After(30 * time.Second):
 		return syscall.Kill(-pid, syscall.SIGKILL)
 	case err := <-errChan:
 		return err

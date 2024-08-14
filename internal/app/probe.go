@@ -37,9 +37,11 @@ func (t *HttpProbe) IsValid() bool {
 }
 
 type Probe struct {
-	Type ProbeType  `json:"type" yaml:"type"`
-	Tcp  *TcpProbe  `json:"tcp,omitempty" yaml:"tcp,omitempty"`
-	Http *HttpProbe `json:"http,omitempty" yaml:"http,omitempty"`
+	Delay    string     `json:"delay" yaml:"delay"`
+	Interval string     `json:"interval" yaml:"interval"`
+	Type     ProbeType  `json:"type" yaml:"type"`
+	Tcp      *TcpProbe  `json:"tcp,omitempty" yaml:"tcp,omitempty"`
+	Http     *HttpProbe `json:"http,omitempty" yaml:"http,omitempty"`
 }
 
 func (p *Probe) IsValid() bool {
