@@ -46,10 +46,12 @@ type AgentServer struct {
 }
 
 func (a *AgentServer) GetWorkflowBaseDir(taskId string) string {
-	dateStr := taskId[:8]
+	yearStr := taskId[:4]
+	monthStr := taskId[4:6]
+	dayStr := taskId[6:8]
 	hourStr := taskId[8:10]
 	id := taskId[10:]
-	return filepath.Join(a.workflowDir, "action", dateStr, hourStr, id)
+	return filepath.Join(a.workflowDir, "action", yearStr, monthStr, dayStr, hourStr, id)
 }
 
 func (a *AgentServer) Shutdown() {
