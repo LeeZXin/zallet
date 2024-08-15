@@ -39,10 +39,10 @@ func service(ctx *cli.Context) error {
 	case sig := <-quit:
 		log.Printf("receive signal: %v", sig)
 		srv.Shutdown(nil, false)
-		// 给时间收尾
-		time.Sleep(5 * time.Second)
 	case <-srv.ShutdownChan:
 		log.Println("receive shutdown chan")
 	}
+	// 给时间收尾
+	time.Sleep(5 * time.Second)
 	return nil
 }
