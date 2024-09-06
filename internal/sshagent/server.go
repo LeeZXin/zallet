@@ -62,6 +62,7 @@ func (a *AgentServer) Shutdown() {
 	}
 	cmds := a.cmdMap.GetAll()
 	for _, cmd := range cmds {
+		fmt.Println("shutdown", cmd.Process.Pid)
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	time.Sleep(time.Second)
@@ -593,7 +594,10 @@ func NewAgentServer(baseDir string) *AgentServer {
 				return
 			}
 			if cmd.Process != nil {
-				log.Printf("kill taskId: %s with err: %v", taskId, util.KillPid(cmd.Process.Pid))
+				err := util.KillNegativePid(cmd.Process.Pid)
+				if err != nil {
+					log.Printf("kill taskId: %s with err: %v", taskId, err)
+				}
 			}
 			session.Exit(0)
 		},

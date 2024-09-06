@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 func executeCommand(line string, session ssh.Session, workdir string) error {
@@ -30,6 +31,9 @@ func newCommand(ctx context.Context, line string, stdout, stderr io.Writer, work
 		cmd = exec.CommandContext(ctx, fields[0])
 	} else {
 		return nil, fmt.Errorf("empty command")
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
 	}
 	cmd.Env = append(os.Environ(), envs...)
 	cmd.Dir = workdir
