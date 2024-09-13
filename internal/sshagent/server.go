@@ -561,7 +561,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session.Stderr(), workdir, session.Environ())
+			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session, workdir, session.Environ())
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return
