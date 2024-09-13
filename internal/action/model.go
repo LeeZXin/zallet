@@ -391,7 +391,7 @@ func (s *step) Run(opts *RunOpts, j *job, index int) error {
 			err = executeCommand(j.ctx, "chmod +x "+cmdPath, nil, nil, opts.Workdir, nil)
 			if err == nil {
 				var cmd *exec.Cmd
-				cmd, err = newCommand(j.ctx, "bash -c "+cmdPath, writer, writer, opts.Workdir, mergeEnvs(s.With, opts.Args))
+				cmd, err = newCommand(j.ctx, fmt.Sprintf(`bash -c "%s"`, cmdPath), writer, writer, opts.Workdir, mergeEnvs(s.With, opts.Args))
 				if err == nil {
 					if s.SetCurr(cmd) {
 						err = cmd.Run()
@@ -450,7 +450,9 @@ func newCommand(ctx context.Context, line string, stdout, stderr io.Writer, work
 		return nil, fmt.Errorf("empty command")
 	}
 	if len(envs) > 0 {
-		cmd.Env = envs
+		cmd.Env = append(os.Environ(), envs...)
+	} else {
+		cmd.Env = os.Environ()
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,

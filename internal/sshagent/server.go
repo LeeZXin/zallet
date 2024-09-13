@@ -549,6 +549,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
+			defer os.Remove(cmdPath)
 			_, err = io.Copy(file, session)
 			file.Close()
 			if err != nil {
@@ -560,7 +561,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session, workdir, session.Environ())
+			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session.Stderr(), workdir, session.Environ())
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return

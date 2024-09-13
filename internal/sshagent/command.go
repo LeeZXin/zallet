@@ -12,7 +12,7 @@ import (
 )
 
 func executeCommand(line string, session ssh.Session, workdir string) error {
-	cmd, err := newCommand(session.Context(), line, session, session, workdir, session.Environ())
+	cmd, err := newCommand(session.Context(), line, session, session.Stderr(), workdir, session.Environ())
 	if err != nil {
 		return err
 	}
