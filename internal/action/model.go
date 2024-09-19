@@ -7,13 +7,12 @@ import (
 	"github.com/LeeZXin/zallet/internal/executor/completable"
 	"github.com/LeeZXin/zallet/internal/hashset"
 	"github.com/LeeZXin/zallet/internal/util"
-	"github.com/kballard/go-shellquote"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -384,21 +383,29 @@ func (s *step) Run(opts *RunOpts, j *job, index int) error {
 		Output:    reader,
 	})
 	if err == nil {
-		cmdPath := filepath.Join(opts.Workdir, util.RandomUuid())
-		err = os.WriteFile(cmdPath, []byte(s.Script), os.ModePerm)
+		var cmd *exec.Cmd
+		if strings.Count(s.Script, "\n") > 0 {
+			cmd = exec.Command("bash", "-c", s.Script)
+		} else {
+			fields := strings.Fields(s.Script)
+			if len(fields) > 1 {
+				cmd = exec.Command(fields[0], fields[1:]...)
+			} else {
+				cmd = exec.Command(s.Script)
+			}
+		}
+		cmd.Env = append(os.Environ(), mergeEnvs(s.With, opts.Args)...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+		cmd.Dir = opts.Workdir
+		cmd.Stdout = writer
+		cmd.Stderr = writer
 		if err == nil {
-			defer util.RemoveAll(cmdPath)
-			err = executeCommand(j.ctx, "chmod +x "+cmdPath, nil, nil, opts.Workdir, nil)
-			if err == nil {
-				var cmd *exec.Cmd
-				cmd, err = newCommand(j.ctx, fmt.Sprintf(`bash -c "%s"`, cmdPath), writer, writer, opts.Workdir, mergeEnvs(s.With, opts.Args))
-				if err == nil {
-					if s.SetCurr(cmd) {
-						err = cmd.Run()
-					} else {
-						err = TaskCancelErr
-					}
-				}
+			if s.SetCurr(cmd) {
+				err = cmd.Run()
+			} else {
+				err = TaskCancelErr
 			}
 		}
 	}
@@ -426,41 +433,6 @@ func mergeEnvs(args, with map[string]string) []string {
 		ret = append(ret, k+"="+v)
 	}
 	return ret
-}
-
-func executeCommand(ctx context.Context, line string, stdout, stderr io.Writer, workdir string, envs []string) error {
-	cmd, err := newCommand(ctx, line, stdout, stderr, workdir, envs)
-	if err != nil {
-		return err
-	}
-	return cmd.Run()
-}
-
-func newCommand(ctx context.Context, line string, stdout, stderr io.Writer, workdir string, envs []string) (*exec.Cmd, error) {
-	fields, err := shellquote.Split(line)
-	if err != nil {
-		return nil, err
-	}
-	var cmd *exec.Cmd
-	if len(fields) > 1 {
-		cmd = exec.CommandContext(ctx, fields[0], fields[1:]...)
-	} else if len(fields) == 1 {
-		cmd = exec.CommandContext(ctx, fields[0])
-	} else {
-		return nil, fmt.Errorf("empty command")
-	}
-	if len(envs) > 0 {
-		cmd.Env = append(os.Environ(), envs...)
-	} else {
-		cmd.Env = os.Environ()
-	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
-	cmd.Dir = workdir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd, nil
 }
 
 type job struct {

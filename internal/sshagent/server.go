@@ -3,13 +3,12 @@ package sshagent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/LeeZXin/zallet/internal/action"
 	"github.com/LeeZXin/zallet/internal/executor"
+	"github.com/LeeZXin/zallet/internal/global"
 	"github.com/LeeZXin/zallet/internal/hashset"
-	"github.com/LeeZXin/zallet/internal/static"
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/LeeZXin/zallet/internal/zssh"
 	"github.com/gliderlabs/ssh"
@@ -18,9 +17,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -28,13 +29,12 @@ import (
 var (
 	validWorkflowTaskIdRegexp *regexp.Regexp
 	validStageTaskIdRegexp    *regexp.Regexp
-	httpClient                *http.Client
 )
 
 type handler func(ssh.Session, map[string]string)
 
-type AgentServer struct {
-	*zssh.Server
+type Server struct {
+	srv              *zssh.Server
 	Token            string
 	graphMap         *graphMap
 	handlerMap       map[string]handler
@@ -45,24 +45,23 @@ type AgentServer struct {
 	serviceExecutor  *executor.Executor
 }
 
-func (a *AgentServer) GetWorkflowBaseDir(taskId string) string {
+func (s *Server) GetWorkflowBaseDir(taskId string) string {
 	yearStr := taskId[:4]
 	monthStr := taskId[4:6]
 	dayStr := taskId[6:8]
 	hourStr := taskId[8:10]
 	id := taskId[10:]
-	return filepath.Join(a.workflowDir, "action", yearStr, monthStr, dayStr, hourStr, id)
+	return filepath.Join(s.workflowDir, "action", yearStr, monthStr, dayStr, hourStr, id)
 }
 
-func (a *AgentServer) Shutdown() {
-	a.Close()
-	graphs := a.graphMap.GetAll()
+func (s *Server) Shutdown() {
+	s.srv.Close()
+	graphs := s.graphMap.GetAll()
 	for _, graph := range graphs {
 		graph.Cancel(action.TaskCancelErr)
 	}
-	cmds := a.cmdMap.GetAll()
+	cmds := s.cmdMap.GetAll()
 	for _, cmd := range cmds {
-		fmt.Println("shutdown", cmd.Process.Pid)
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	time.Sleep(time.Second)
@@ -252,7 +251,7 @@ func notifyCallback(callbackUrl, token, taskId string, req any) {
 	if err == nil {
 		request.Header.Set("Content-Type", "application/json;charset=utf-8")
 		request.Header.Set("Authorization", token)
-		resp, err := httpClient.Do(request)
+		resp, err := http.DefaultClient.Do(request)
 		if err == nil {
 			defer resp.Body.Close()
 		} else {
@@ -263,47 +262,33 @@ func notifyCallback(callbackUrl, token, taskId string, req any) {
 	}
 }
 
-func NewAgentServer(baseDir string) *AgentServer {
+func StartServer() *Server {
 	validWorkflowTaskIdRegexp = regexp.MustCompile(`^\d{10}\S+$`)
 	validStageTaskIdRegexp = regexp.MustCompile(`^\S{32}$`)
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-			TLSHandshakeTimeout: 10 * time.Second,
-			MaxIdleConns:        1,
-			IdleConnTimeout:     time.Minute,
-			MaxConnsPerHost:     100,
-			MaxIdleConnsPerHost: 100,
-			ForceAttemptHTTP2:   true,
-		},
-		Timeout: 3 * time.Second,
-	}
-	agent := new(AgentServer)
-	poolSize := static.GetInt("ssh.agent.workflow.poolSize")
+	agent := new(Server)
+	poolSize := global.Viper.GetInt("ssh.agent.workflow.poolSize")
 	if poolSize <= 0 {
 		poolSize = 10
 	}
-	queueSize := static.GetInt("ssh.agent.workflow.queueSize")
+	queueSize := global.Viper.GetInt("ssh.agent.workflow.queueSize")
 	if queueSize <= 0 {
 		queueSize = 1024
 	}
 	agent.workflowExecutor, _ = executor.NewExecutor(poolSize, queueSize, time.Minute, executor.AbortStrategy)
-	poolSize = static.GetInt("ssh.agent.service.poolSize")
+	poolSize = global.Viper.GetInt("ssh.agent.service.poolSize")
 	if poolSize <= 0 {
 		poolSize = 10
 	}
-	queueSize = static.GetInt("ssh.agent.service.queueSize")
+	queueSize = global.Viper.GetInt("ssh.agent.service.queueSize")
 	if queueSize <= 0 {
 		queueSize = 1024
 	}
 	agent.serviceExecutor, _ = executor.NewExecutor(poolSize, queueSize, time.Minute, executor.AbortStrategy)
-	agent.Token = static.GetString("ssh.agent.Token")
+	agent.Token = global.Viper.GetString("ssh.agent.Token")
 	agent.graphMap = newGraphMap()
 	agent.cmdMap = newCmdMap()
-	agent.workflowDir = filepath.Join(baseDir, "workflow")
-	agent.servicesDir = filepath.Join(baseDir, "services")
+	agent.workflowDir = filepath.Join(global.BaseDir, "workflow")
+	agent.servicesDir = filepath.Join(global.BaseDir, "services")
 	agent.handlerMap = map[string]handler{
 		"getWorkflowStepLog": func(session ssh.Session, args map[string]string) {
 			taskId := args["i"]
@@ -425,7 +410,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 					Status: RunningStatus,
 				})
 				err := graph.Run(action.RunOpts{
-					Workdir: filepath.Join(agent.workflowDir, "temp", taskId),
+					Workdir: filepath.Join(agent.workflowDir, taskId),
 					StepOutputFunc: func(stat action.StepOutputStat) {
 						defer stat.Output.Close()
 						stepDir := filepath.Join(logDir, stat.JobName, strconv.Itoa(stat.Index))
@@ -527,8 +512,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 				return
 			}
 			workdir := filepath.Join(agent.servicesDir, service)
-			tempDir := filepath.Join(workdir, "temp")
-			err := os.MkdirAll(tempDir, os.ModePerm)
+			err := os.MkdirAll(workdir, os.ModePerm)
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return
@@ -543,25 +527,30 @@ func NewAgentServer(baseDir string) *AgentServer {
 				returnErrMsg(session, "duplicated taskId")
 				return
 			}
-			cmdPath := filepath.Join(tempDir, taskId)
-			file, err := os.Create(cmdPath)
-			if err != nil {
+			input := new(bytes.Buffer)
+			_, err = io.Copy(input, session)
+			if cmd != nil {
 				returnErrMsg(session, err.Error())
 				return
 			}
-			defer os.Remove(cmdPath)
-			_, err = io.Copy(file, session)
-			file.Close()
-			if err != nil {
-				returnErrMsg(session, err.Error())
-				return
+			script := input.String()
+			if strings.Count(script, "\n") > 0 {
+				cmd = exec.Command("bash", "-c", script)
+			} else {
+				fields := strings.Fields(script)
+				if len(fields) > 1 {
+					cmd = exec.Command(fields[0], fields[1:]...)
+				} else {
+					cmd = exec.Command(script)
+				}
 			}
-			err = executeCommand("chmod +x "+cmdPath, session, workdir)
-			if err != nil {
-				returnErrMsg(session, err.Error())
-				return
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				Setpgid: true,
 			}
-			cmd, err = newCommand(session.Context(), "bash -c "+cmdPath, session, session, workdir, session.Environ())
+			cmd.Env = append(os.Environ(), session.Environ()...)
+			cmd.Dir = workdir
+			cmd.Stdout = session
+			cmd.Stderr = session.Stderr()
 			if err != nil {
 				returnErrMsg(session, err.Error())
 				return
@@ -603,16 +592,16 @@ func NewAgentServer(baseDir string) *AgentServer {
 			session.Exit(0)
 		},
 	}
-	agentHost := static.GetString("ssh.agent.host")
+	agentHost := global.Viper.GetString("ssh.agent.host")
 	if agentHost == "" {
 		agentHost = "127.0.0.1:6666"
 	}
 	if !regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}:\d+$`).MatchString(agentHost) {
 		log.Fatalf("invalid agent host: %v", agentHost)
 	}
-	serv, err := zssh.NewServer(&zssh.ServerOpts{
+	serv, err := zssh.NewServer(zssh.ServerOpts{
 		Host:    agentHost,
-		HostKey: filepath.Join(baseDir, "data", "ssh", "sshAgent.rsa"),
+		HostKey: filepath.Join(global.BaseDir, "ssh", "sshAgent.rsa"),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			if ctx.User() != "zall" {
 				return false
@@ -641,7 +630,7 @@ func NewAgentServer(baseDir string) *AgentServer {
 	if err != nil {
 		log.Fatal(err)
 	}
-	agent.Server = serv
+	agent.srv = serv
 	return agent
 }
 

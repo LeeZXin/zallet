@@ -11,7 +11,6 @@ import (
 
 type Server struct {
 	*ssh.Server
-	Host string
 }
 
 type ServerOpts struct {
@@ -21,10 +20,7 @@ type ServerOpts struct {
 	SessionHandler   ssh.Handler
 }
 
-func NewServer(opts *ServerOpts) (*Server, error) {
-	if opts == nil {
-		return nil, errors.New("nil opts")
-	}
+func NewServer(opts ServerOpts) (*Server, error) {
 	if opts.PublicKeyHandler == nil {
 		return nil, errors.New("nil publicKeyHandler")
 	}
@@ -56,18 +52,14 @@ func NewServer(opts *ServerOpts) (*Server, error) {
 	if err = srv.SetOption(ssh.HostKeyFile(hostKey)); err != nil {
 		return nil, fmt.Errorf("set host key failed: %v", err)
 	}
-	return &Server{
-		Server: srv,
-		Host:   opts.Host,
-	}, nil
-}
-
-func (s *Server) Start() {
 	go func() {
-		log.Printf("start ssh server %s", s.Host)
-		err := s.ListenAndServe()
-		if err != nil && err != ssh.ErrServerClosed {
+		log.Printf("start ssh server %s", opts.Host)
+		err2 := srv.ListenAndServe()
+		if err2 != nil && err2 != ssh.ErrServerClosed {
 			log.Fatalf("start ssh server err: %v", err)
 		}
 	}()
+	return &Server{
+		Server: srv,
+	}, nil
 }

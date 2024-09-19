@@ -1,4 +1,4 @@
-package app
+package process
 
 import (
 	"encoding/json"
@@ -7,11 +7,12 @@ import (
 )
 
 type Yaml struct {
-	Env   string            `json:"env" yaml:"env"`
-	App   string            `json:"app" yaml:"app"`
-	Start string            `json:"start" yaml:"start"`
-	With  map[string]string `json:"with" yaml:"with"`
-	Probe *Probe            `json:"probe" yaml:"probe"`
+	Env     string            `json:"env" yaml:"env"`
+	App     string            `json:"app" yaml:"app"`
+	Start   string            `json:"start" yaml:"start"`
+	With    map[string]string `json:"with" yaml:"with"`
+	Probe   *Probe            `json:"probe" yaml:"probe"`
+	Workdir string            `json:"workdir" yaml:"workdir"`
 }
 
 func (f *Yaml) IsValid() error {
@@ -23,7 +24,10 @@ func (f *Yaml) IsValid() error {
 		return errors.New("invalid app")
 	}
 	if f.Start == "" {
-		return errors.New("invalid start")
+		return errors.New("invalid service")
+	}
+	if f.Workdir == "" {
+		return errors.New("invalid workdir")
 	}
 	return nil
 }

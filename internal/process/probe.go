@@ -1,4 +1,4 @@
-package app
+package process
 
 import (
 	"net"
@@ -55,7 +55,7 @@ func (p *Probe) IsValid() bool {
 	}
 }
 
-func runProbe(p *Probe) bool {
+func (p *Probe) run() bool {
 	switch p.Type {
 	case HttpProbeType:
 		if p.Http != nil {

@@ -14,7 +14,6 @@ var (
 		Kill,
 		Delete,
 		Restart,
-		SshAgent,
 		Ls,
 	}
 )

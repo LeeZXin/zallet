@@ -9,16 +9,10 @@ var Run = &cli.Command{
 	Name:   "run",
 	Usage:  "This command starts zallet server",
 	Action: run,
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name: "baseDir",
-		},
-	},
 	Hidden: true,
 }
 
-func run(ctx *cli.Context) error {
-	baseDir := ctx.String("baseDir")
-	zallet.Init(baseDir)
+func run(_ *cli.Context) error {
+	zallet.Run()
 	return nil
 }

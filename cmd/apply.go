@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/LeeZXin/zallet/internal/app"
+	"github.com/LeeZXin/zallet/internal/process"
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
@@ -37,7 +37,7 @@ func apply(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var y app.Yaml
+	var y process.Yaml
 	err = yaml.Unmarshal(content, &y)
 	if err != nil {
 		return err

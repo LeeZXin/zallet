@@ -1,4 +1,4 @@
-package reexec
+package process
 
 import (
 	"bytes"
@@ -11,44 +11,49 @@ import (
 	"syscall"
 )
 
-var (
-	ClosedErr = errors.New("closed")
+type Status string
+
+const (
+	StartingStatus Status = "starting"
+	RunningStatus  Status = "running"
+	StoppingStatus Status = "stopping"
+	StoppedStatus  Status = "stopped"
 )
 
-type AsyncCommand struct {
+type Process struct {
 	Cmd     *exec.Cmd
 	errChan chan error
 }
 
-func (p *AsyncCommand) Kill() error {
+func (p *Process) Kill() error {
 	if p.Cmd.Process != nil {
-		err := util.KillNegativePid(p.Cmd.Process.Pid)
-		if err == nil {
-			return p.Wait()
-		}
-		return err
+		return util.KillNegativePid(p.Cmd.Process.Pid)
 	}
 	return nil
 }
 
-func (p *AsyncCommand) GetPid() int {
-	if p.Cmd.Process != nil {
-		return p.Cmd.Process.Pid
+func (p *Process) GetPid() int {
+	if p == nil {
+		return 0
+	}
+	proc := p.Cmd.Process
+	if proc != nil {
+		return proc.Pid
 	}
 	return 0
 }
 
-func (p *AsyncCommand) Wait() error {
+func (p *Process) Wait() error {
 	select {
 	case err, ok := <-p.errChan:
 		if !ok {
-			return ClosedErr
+			return errors.New("process is down")
 		}
 		return err
 	}
 }
 
-func RunAsyncCommand(workdir, script string, envs []string, stdin io.Reader) (*AsyncCommand, error) {
+func RunProcess(workDir, script string, envs []string, stdin io.Reader) (*Process, error) {
 	if script == "" {
 		return nil, errors.New("empty script")
 	}
@@ -67,7 +72,7 @@ func RunAsyncCommand(workdir, script string, envs []string, stdin io.Reader) (*A
 		Setpgid: true,
 	}
 	stderr := new(bytes.Buffer)
-	cmd.Dir = workdir
+	cmd.Dir = workDir
 	cmd.Stdin = stdin
 	cmd.Stderr = stderr
 	if len(envs) > 0 {
@@ -80,7 +85,7 @@ func RunAsyncCommand(workdir, script string, envs []string, stdin io.Reader) (*A
 	if err != nil {
 		return nil, err
 	}
-	ret := &AsyncCommand{
+	ret := &Process{
 		Cmd:     cmd,
 		errChan: make(chan error, 1),
 	}

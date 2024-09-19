@@ -2,19 +2,17 @@ package cmd
 
 import (
 	"encoding/json"
-	"github.com/LeeZXin/zallet/internal/app"
+	"github.com/LeeZXin/zallet/internal/process"
 	"github.com/urfave/cli/v2"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 var Service = &cli.Command{
 	Name:     "service",
-	Usage:    "This command fork service, should only called by zallet server",
+	Usage:    "This command fork target service, should only called by zallet server",
 	Action:   service,
 	HideHelp: true,
 }
@@ -24,25 +22,26 @@ func service(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var opts app.ServiceOpts
+	var opts process.ServiceOpts
 	err = json.Unmarshal(input, &opts)
 	if err != nil {
 		return err
 	}
-	srv, err := app.RunService(opts)
+	err = opts.IsValid()
+	if err != nil {
+		return err
+	}
+	supv := process.NewSupervisor(opts)
+	err = supv.Run()
 	if err != nil {
 		return err
 	}
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	select {
-	case sig := <-quit:
-		log.Printf("receive signal: %v", sig)
-		srv.Shutdown(nil, false)
-	case <-srv.ShutdownChan:
-		log.Println("receive shutdown chan")
+	case <-quit:
+	case <-supv.ShutdownChan:
 	}
-	// 给时间收尾
-	time.Sleep(5 * time.Second)
+	supv.Shutdown()
 	return nil
 }

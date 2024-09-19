@@ -22,11 +22,11 @@ func health(ctx *cli.Context) error {
 	sockFile := getSockFile(ctx)
 	httpClient := util.NewUnixHttpClient(sockFile)
 	defer httpClient.CloseIdleConnections()
-	resp, err := httpClient.Get("http://fake/api/health")
+	resp, err := httpClient.Get("http://fake/api/v1/health")
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server return http status code: %v", resp.StatusCode)
 	}

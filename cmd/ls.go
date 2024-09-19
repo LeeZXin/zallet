@@ -3,7 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/LeeZXin/zallet/internal/app"
+	"github.com/LeeZXin/zallet/internal/global"
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/urfave/cli/v2"
 	"io"
@@ -55,7 +55,7 @@ func ls(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	ret := make([]app.ServiceVO, 0)
+	ret := make([]global.ServiceVO, 0)
 	err = json.Unmarshal(body, &ret)
 	if err != nil {
 		return err
