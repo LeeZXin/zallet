@@ -63,21 +63,3 @@ func DeleteServiceByServiceId(session *xorm.Session, serviceId string) (bool, er
 		Delete(new(Service))
 	return rows == 1, err
 }
-
-func DeleteServiceByInstanceIdAndExpiredTime(session *xorm.Session, instanceId string, expiredTime time.Time) error {
-	_, err := session.
-		Where("instance_id = ?", instanceId).
-		And("event_time < ?", expiredTime.UnixMilli()).
-		Delete(new(Service))
-	return err
-}
-
-func UpdateCpuAndMemPercent(session *xorm.Session, serviceId string, cpuPercent, memPercent int) (bool, error) {
-	rows, err := session.Where("service_id = ?", serviceId).
-		Cols("cpu_percent", "mem_percent").
-		Update(&Service{
-			CpuPercent: cpuPercent,
-			MemPercent: memPercent,
-		})
-	return rows == 1, err
-}

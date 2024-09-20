@@ -3,7 +3,6 @@ package httpagent
 import (
 	"github.com/LeeZXin/zallet/internal/global"
 	"github.com/LeeZXin/zallet/internal/process"
-	"github.com/LeeZXin/zallet/internal/servicemd"
 	"github.com/LeeZXin/zallet/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
@@ -11,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 )
 
 type Server struct {
@@ -58,13 +56,6 @@ func StartServer() *Server {
 		Handler: engine.Handler(),
 	}
 	go func() {
-		for {
-			// 删除过期服务
-			deleteExpiredService()
-			time.Sleep(30 * time.Second)
-		}
-	}()
-	go func() {
 		err2 := srv.Serve(listener)
 		if err2 != nil && err2 != http.ErrServerClosed {
 			log.Fatalf("start http server failed with err:%v", err2)
@@ -72,15 +63,6 @@ func StartServer() *Server {
 	}()
 	return &Server{
 		srv: srv,
-	}
-}
-
-func deleteExpiredService() {
-	session := global.Xengine.NewSession()
-	defer session.Close()
-	err := servicemd.DeleteServiceByInstanceIdAndExpiredTime(session, global.InstanceId, time.Now().Add(-10*time.Minute))
-	if err != nil {
-		log.Printf("delete expired service with err: %v", err)
 	}
 }
 
