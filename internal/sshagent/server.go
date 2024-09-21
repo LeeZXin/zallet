@@ -592,15 +592,9 @@ func StartServer() *Server {
 			session.Exit(0)
 		},
 	}
-	agentHost := global.Viper.GetString("ssh.agent.host")
-	if agentHost == "" {
-		agentHost = "127.0.0.1:6666"
-	}
-	if !regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}:\d+$`).MatchString(agentHost) {
-		log.Fatalf("invalid agent host: %v", agentHost)
-	}
+	agentPort := global.GetSshAgentPort()
 	serv, err := zssh.NewServer(zssh.ServerOpts{
-		Host:    agentHost,
+		Host:    fmt.Sprintf(":%d", agentPort),
 		HostKey: filepath.Join(global.BaseDir, "ssh", "sshAgent.rsa"),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			if ctx.User() != "zall" {

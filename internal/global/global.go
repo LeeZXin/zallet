@@ -21,9 +21,14 @@ var (
 	AppPath    string
 	SshHost    string
 	SshToken   string
+	LocalIp    string
 )
 
 func Init() {
+	LocalIp = util.GetIPV4()
+	if LocalIp == "" {
+		log.Fatal("can not get local ip")
+	}
 	if InstanceId == "" {
 		AppPath = util.GetAppPath()
 		pwd, err := os.Getwd()
@@ -41,7 +46,7 @@ func Init() {
 		Xengine = newXormEngine()
 		SshHost = Viper.GetString("ssh.agent.host")
 		if SshHost == "" {
-			SshHost = "127.0.0.1:6666"
+			SshHost = ":6666"
 		}
 		SshToken = Viper.GetString("ssh.agent.token")
 	}
@@ -84,4 +89,12 @@ func newXormEngine() *xorm.Engine {
 	x.SetMaxIdleConns(1)
 	x.SetConnMaxLifetime(time.Hour)
 	return x
+}
+
+func GetSshAgentPort() int {
+	port := Viper.GetInt("ssh.agent.port")
+	if port == 0 {
+		port = 6666
+	}
+	return port
 }

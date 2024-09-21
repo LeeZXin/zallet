@@ -134,6 +134,10 @@ func doApplyAppYaml(appYaml process.Yaml) error {
 		if cmdRet == nil {
 			return nil, errors.New("run command failed")
 		}
+		sshHost := global.Viper.GetString("ssh.agent.host")
+		if sshHost == "" {
+			sshHost = fmt.Sprintf("%s:%d", global.LocalIp, global.GetSshAgentPort())
+		}
 		md := &servicemd.Service{
 			Pid:           cmdRet.Cmd.Process.Pid,
 			ServiceId:     serviceId,
@@ -142,7 +146,7 @@ func doApplyAppYaml(appYaml process.Yaml) error {
 			App:           appYaml.App,
 			AppYaml:       &appYaml,
 			Env:           appYaml.Env,
-			AgentHost:     global.SshHost,
+			AgentHost:     sshHost,
 			AgentToken:    global.SshToken,
 			EventTime:     time.Now().UnixMilli(),
 		}
